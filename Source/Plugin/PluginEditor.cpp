@@ -5,9 +5,9 @@
 namespace {
 constexpr const char *sectionNames[]{"01  FILTERS",  "02  TONE",  "03  STEREO",
                                      "04  DYNAMICS", "05  COLOR", "06  OUTPUT"};
-constexpr const char *sectionDescriptions[]{"Clean the ends",      "Shape the balance",
-                                            "Focus the low end",   "Control the movement",
-                                            "Add weight and edge", "Set the final level"};
+constexpr const char *sectionDescriptions[]{"Low cut and high cut", "Low and high shelf gain",
+                                            "Low-band width",      "Compressor and dynamic EQ",
+                                            "Saturation and clip", "Limiter drive and ceiling"};
 } // namespace
 
 AnalogMasterEditor::AnalogMasterEditor(AnalogMasterProcessor &owner)
@@ -295,7 +295,7 @@ void AnalogMasterEditor::paint(juce::Graphics &g) {
     g.drawText("openMaster", 70, 12, 245, 34, juce::Justification::centredLeft);
     g.setColour(p.accentPrimary);
     g.setFont(juce::FontOptions(10.f, juce::Font::bold));
-    g.drawText("STUDIO 84  /  MASTERING PROCESSOR", 72, 45, 300, 17, juce::Justification::centredLeft);
+    g.drawText("STUDIO 84", 72, 45, 300, 17, juce::Justification::centredLeft);
     g.setColour(p.headerSub);
     g.drawText("FACEPLATE", 847, 25, 90, 23, juce::Justification::centredRight);
     for (int i = 0; i < 6; ++i) {
@@ -323,7 +323,7 @@ void AnalogMasterEditor::paint(juce::Graphics &g) {
     if (selected_ == 2)
         hint = "Width affects the low band only. Audition the crossover with AUDITION LOW.";
     if (selected_ == 4)
-        hint = "8x oversampling  /  Drive into the curve; use MIX to blend.";
+        hint = "8x oversampling. Drive sets the amount. MIX blends dry and wet.";
     if (selected_ == 5)
         hint = "5 ms lookahead  /  Trim precedes clipping and limiting.";
     g.drawText(hint, 34, 674, 774, 14, juce::Justification::centredLeft);
