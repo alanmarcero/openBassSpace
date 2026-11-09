@@ -564,7 +564,8 @@ struct SaturationStage::Impl {
                      normalization = std::pow(d, -autoGain.next()), out = amp(outputGain.next());
         auto shape = [=](double x) {
             const double driven = x * d;
-            return ((1 - ch) * std::tanh(driven) + ch * driven / (1 + std::abs(driven))) * normalization *
+            const double warmed = driven + 0.035 * driven * std::abs(driven);
+            return ((1 - ch) * std::tanh(warmed) + ch * warmed / (1 + std::abs(warmed))) * normalization *
                    out;
         };
         const Stereo wet{oversampler.process(l, 0, shape), oversampler.process(r, 1, shape)};
