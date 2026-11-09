@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(openMaster VERSION 1.2.4 LANGUAGES C CXX)
+project(openBassSpace VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,26 +9,20 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-option(AMS_BUILD_PLUGIN "Build the VST3 plugin" ON)
-option(AMS_BUILD_TESTS "Build the unit tests" ON)
-option(AMS_BUILD_HOST_CHECKS "Build native editor and state integration checks" OFF)
+option(OBS_BUILD_PLUGIN "Build the plugin" ON)
+option(OBS_BUILD_TESTS "Build the unit tests" ON)
 
 include(FetchContent)
 
-add_library(open_master_core STATIC
+add_library(open_bass_space_core STATIC
     Source/Core/BiquadFilter.cpp
-    Source/Core/ButterworthCoeffs.cpp
-    Source/Core/MultiPoleFilter.cpp
     Source/Core/LinkwitzRiley.cpp
     Source/Core/StereoFieldShaper.cpp
-    Source/Core/LoudnessMeter.cpp
-    Source/Core/MasteringStages.cpp
-    Source/Core/MasterProcessorCore.cpp
 )
-target_include_directories(open_master_core PUBLIC Source/Core)
-set_target_properties(open_master_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(open_bass_space_core PUBLIC Source/Core)
+set_target_properties(open_bass_space_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if(AMS_BUILD_PLUGIN)
+if(OBS_BUILD_PLUGIN)
     FetchContent_Declare(juce
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
         GIT_TAG 8.0.9
@@ -37,18 +31,17 @@ if(AMS_BUILD_PLUGIN)
 
     juce_add_binary_data(OpenMasterAssets
         SOURCES
-            assets/alan_marcero_logo.jpg
             assets/analog-cyber-faceplate.png)
     set_target_properties(OpenMasterAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-    juce_add_plugin(openMaster
+    juce_add_plugin(openBassSpace
         COMPANY_NAME "Alan Marcero"
-        BUNDLE_ID "com.alanmarcero.openmaster"
-        PRODUCT_NAME "openMaster"
+        BUNDLE_ID "com.alanmarcero.openbassspace"
+        PRODUCT_NAME "openBassSpace"
         PLUGIN_MANUFACTURER_CODE Amrc
-        PLUGIN_CODE Omst
-        FORMATS VST3
-        VST3_CATEGORIES Fx Mastering EQ
+        PLUGIN_CODE Obsp
+        FORMATS VST3 AU Standalone
+        VST3_CATEGORIES Fx Spatial
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE
@@ -56,25 +49,23 @@ if(AMS_BUILD_PLUGIN)
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE
         COPY_PLUGIN_AFTER_BUILD FALSE)
 
-    target_sources(openMaster PRIVATE
+    target_sources(openBassSpace PRIVATE
         Source/Plugin/Parameters.cpp
-        Source/Plugin/AnalogLookAndFeel.cpp
-        Source/Plugin/VintageMeter.cpp
         Source/Plugin/PluginProcessor.cpp
         Source/Plugin/PluginEditor.cpp)
 
-    target_include_directories(openMaster PRIVATE
+    target_include_directories(openBassSpace PRIVATE
         Source/Core
         Source/Plugin)
 
-    target_compile_definitions(openMaster PUBLIC
+    target_compile_definitions(openBassSpace PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
-    target_link_libraries(openMaster
+    target_link_libraries(openBassSpace
         PRIVATE
-            open_master_core
+            open_bass_space_core
             OpenMasterAssets
             juce::juce_audio_processors
             juce::juce_audio_utils
@@ -83,38 +74,27 @@ if(AMS_BUILD_PLUGIN)
             juce::juce_recommended_config_flags
             juce::juce_recommended_lto_flags
             juce::juce_recommended_warning_flags)
+
+    add_executable(open_bass_space_capture Tests/PluginHostChecks.cpp)
+    target_include_directories(open_bass_space_capture PRIVATE Source/Plugin Source/Core)
+    target_link_libraries(open_bass_space_capture PRIVATE openBassSpace juce::juce_audio_utils)
+    target_compile_definitions(open_bass_space_capture PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
 endif()
 
-if(AMS_BUILD_TESTS)
+if(OBS_BUILD_TESTS)
     FetchContent_Declare(Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG v3.9.1
         GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(open_master_tests
+    add_executable(open_bass_space_tests
         Tests/BiquadFilterTests.cpp
-        Tests/ButterworthCoeffsTests.cpp
-        Tests/StereoFieldShaperTests.cpp
-        Tests/MasterProcessorCoreTests.cpp
-        Tests/LoudnessMeterTests.cpp
-        Tests/MasteringStagesTests.cpp
-        Tests/MasteringChainTests.cpp
-        Tests/RealtimeTests.cpp)
+        Tests/StereoFieldShaperTests.cpp)
 
-    target_link_libraries(open_master_tests PRIVATE open_master_core Catch2::Catch2WithMain)
+    target_link_libraries(open_bass_space_tests PRIVATE open_bass_space_core Catch2::Catch2WithMain)
 
     enable_testing()
     include(Catch)
-    catch_discover_tests(open_master_tests)
-endif()
-
-if(AMS_BUILD_PLUGIN AND AMS_BUILD_HOST_CHECKS)
-    add_executable(open_master_host_checks Tests/PluginHostChecks.cpp)
-    target_include_directories(open_master_host_checks PRIVATE Source/Plugin Source/Core)
-    target_link_libraries(open_master_host_checks PRIVATE openMaster juce::juce_audio_utils)
-    target_compile_definitions(open_master_host_checks PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
-    if(AMS_BUILD_TESTS)
-        add_test(NAME "Native editor and state integration" COMMAND open_master_host_checks)
-    endif()
+    catch_discover_tests(open_bass_space_tests)
 endif()

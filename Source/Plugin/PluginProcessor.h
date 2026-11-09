@@ -1,24 +1,19 @@
 #pragma once
 
-#include "MasterProcessorCore.h"
 #include "Parameters.h"
+#include "StereoFieldShaper.h"
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <map>
-#include <string>
 
-class AnalogMasterProcessor final : public juce::AudioProcessor {
+class BassSpaceProcessor final : public juce::AudioProcessor {
 public:
-    AnalogMasterProcessor();
-    ~AnalogMasterProcessor() override = default;
+    BassSpaceProcessor();
+    ~BassSpaceProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
-    void reset() override { core_.reset(); }
+    void reset() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
-
-    void processBlockBypassed(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
-    void resetMeters() noexcept { core_.requestMeterReset(); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -27,7 +22,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.1; }
+    double getTailLengthSeconds() const override { return 0.05; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -38,18 +33,20 @@ public:
     void getStateInformation(juce::MemoryBlock& destination) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    [[nodiscard]] analog_master::core::MeterLevels takeMeterLevels() noexcept {
-        return core_.takeMeterLevels();
+    [[nodiscard]] float currentFrequency() const noexcept {
+        return freqParam_ != nullptr ? freqParam_->load(std::memory_order_relaxed) : 120.0f;
+    }
+
+    [[nodiscard]] float currentWidth() const noexcept {
+        return widthParam_ != nullptr ? widthParam_->load(std::memory_order_relaxed) : 0.0f;
     }
 
     juce::AudioProcessorValueTreeState parameters;
 
 private:
-    void syncParameters();
-    void processAudio(juce::AudioBuffer<float>& buffer, bool hostBypassed);
+    std::atomic<float>* freqParam_ = nullptr;
+    std::atomic<float>* widthParam_ = nullptr;
+    analog_master::core::StereoFieldShaper shaper_;
 
-    std::map<std::string, std::atomic<float>*, std::less<>> rawParameters_;
-    analog_master::core::MasterProcessorCore core_;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AnalogMasterProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceProcessor)
 };
