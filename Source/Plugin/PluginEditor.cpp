@@ -295,7 +295,7 @@ void AnalogMasterEditor::paint(juce::Graphics &g) {
     g.drawText("openMaster", 70, 12, 245, 34, juce::Justification::centredLeft);
     g.setColour(p.accentPrimary);
     g.setFont(juce::FontOptions(10.f, juce::Font::bold));
-    g.drawText("STUDIO 84", 72, 45, 300, 17, juce::Justification::centredLeft);
+    g.drawText("STUDIO 84  /  PRECISION ANALOG MASTERING CHAIN", 72, 45, 420, 17, juce::Justification::centredLeft);
     g.setColour(p.headerSub);
     g.drawText("FACEPLATE", 847, 25, 90, 23, juce::Justification::centredRight);
     for (int i = 0; i < 6; ++i) {
