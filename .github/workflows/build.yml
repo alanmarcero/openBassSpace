@@ -17,7 +17,7 @@ jobs:
   macos:
     runs-on: macos-15
     env:
-      BUNDLE: build/openMaster_artefacts/Release/VST3/openMaster.vst3
+      BUNDLE: build/openBassSpace_artefacts/Release/VST3/openBassSpace.vst3
     steps:
       - uses: actions/checkout@v4
 
@@ -44,17 +44,20 @@ jobs:
           mkdir -p dist
           ditto "$BUNDLE" "dist/$(basename "$BUNDLE")"
           python3 scripts/package_notices.py dist
-          ditto -c -k dist openMaster-VST3-macOS.zip
+          ditto -c -k dist openBassSpace-VST3-macOS.zip
+          cp openBassSpace-VST3-macOS.zip openMaster-VST3-macOS.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: openMaster-VST3-macOS
-          path: openMaster-VST3-macOS.zip
+          name: openBassSpace-VST3-macOS
+          path: |
+            openBassSpace-VST3-macOS.zip
+            openMaster-VST3-macOS.zip
 
   windows:
     runs-on: windows-latest
     env:
-      BUNDLE: build/openMaster_artefacts/Release/VST3/openMaster.vst3
+      BUNDLE: build/openBassSpace_artefacts/Release/VST3/openBassSpace.vst3
     steps:
       - uses: actions/checkout@v4
 
@@ -79,12 +82,15 @@ jobs:
           Copy-Item -Recurse "$env:BUNDLE" dist/
           python scripts/package_notices.py dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Compress-Archive -Path dist/* -DestinationPath openMaster-VST3-Windows.zip
+          Compress-Archive -Path dist/* -DestinationPath openBassSpace-VST3-Windows.zip
+          Copy-Item openBassSpace-VST3-Windows.zip openMaster-VST3-Windows.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: openMaster-VST3-Windows
-          path: openMaster-VST3-Windows.zip
+          name: openBassSpace-VST3-Windows
+          path: |
+            openBassSpace-VST3-Windows.zip
+            openMaster-VST3-Windows.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -98,6 +104,8 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: openMaster-VST3-*.zip
+          files: |
+            openBassSpace-VST3-*.zip
+            openMaster-VST3-*.zip
           fail_on_unmatched_files: true
           generate_release_notes: true
