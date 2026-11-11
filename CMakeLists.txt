@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(openBassSpace VERSION 2.0.0 LANGUAGES C CXX)
+project(openBassSpace VERSION 2.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,8 @@ if(OBS_BUILD_PLUGIN)
 
     juce_add_binary_data(OpenMasterAssets
         SOURCES
-            assets/analog-cyber-faceplate.png)
+            assets/analog-cyber-faceplate.png
+            assets/bass-space-nebula.png)
     set_target_properties(OpenMasterAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     juce_add_plugin(openBassSpace
