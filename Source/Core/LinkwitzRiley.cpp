@@ -4,9 +4,13 @@
 
 namespace analog_master::core {
 
+LinkwitzRiley4::LinkwitzRiley4() {
+    prepare(44100.0);
+}
+
 void LinkwitzRiley4::prepare(double sampleRate) noexcept {
-    if (sampleRate <= 0.0) {
-        return;
+    if (sampleRate < 8000.0) {
+        sampleRate = 44100.0;
     }
     sampleRate_ = sampleRate;
     reset();
@@ -29,10 +33,11 @@ void LinkwitzRiley4::setCrossoverFrequency(double freqHz) noexcept {
 }
 
 void LinkwitzRiley4::updateCoefficients() noexcept {
-    const double maxCutoff = sampleRate_ * 0.49;
+    const double sr = sampleRate_ > 1000.0 ? sampleRate_ : 44100.0;
+    const double maxCutoff = sr * 0.49;
     const double safeCutoff = std::clamp(crossoverHz_, 20.0, maxCutoff);
 
-    const double K = std::tan(std::numbers::pi * safeCutoff / sampleRate_);
+    const double K = std::tan(std::numbers::pi * safeCutoff / sr);
     const double K2 = K * K;
     constexpr double sqrt2 = std::numbers::sqrt2;
 

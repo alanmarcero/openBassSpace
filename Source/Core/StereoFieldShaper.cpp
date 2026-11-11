@@ -4,9 +4,13 @@
 
 namespace analog_master::core {
 
+StereoFieldShaper::StereoFieldShaper() {
+    prepare(44100.0);
+}
+
 void StereoFieldShaper::prepare(double sampleRate) noexcept {
-    if (sampleRate <= 0.0) {
-        return;
+    if (sampleRate < 8000.0) {
+        sampleRate = 44100.0;
     }
     sampleRate_ = sampleRate;
     currentCrossoverHz_ = crossoverHz_;
@@ -147,7 +151,8 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
 
     // Stereo channel processing with sub-block crossover smoothing & click-free width/solo/bypass interpolation
     constexpr int kSubBlockSize = 16;
-    const double smoothingCoeff = 1.0 - std::exp(-static_cast<double>(kSubBlockSize) / (0.006 * sampleRate_));
+    const double effectiveSr = sampleRate_ > 1000.0 ? sampleRate_ : 44100.0;
+    const double smoothingCoeff = 1.0 - std::exp(-static_cast<double>(kSubBlockSize) / (0.006 * effectiveSr));
 
     int sampleIdx = 0;
     while (sampleIdx < numSamples) {

@@ -65,6 +65,20 @@ int main(int argc, char** argv) {
     const float avgDiff = diffSum / 512.0f;
     require(avgDiff < 0.05f, "Low end collapsed to mono");
 
-    std::cout << "openBassSpace v2.0.0 checks passed and screenshot saved to " << outPath << "\n";
+    // Audio test: Verify mono input processing (DAW mono track)
+    juce::AudioBuffer<float> monoAudio(1, 256);
+    for (int i = 0; i < 256; ++i) {
+        monoAudio.setSample(0, i, 0.4f);
+    }
+    p.processBlock(monoAudio, midi);
+    for (int i = 0; i < 256; ++i) {
+        require(std::isfinite(monoAudio.getSample(0, i)), "Mono output is finite");
+    }
+
+    // Audio test: Zero-channel/zero-sample safety
+    juce::AudioBuffer<float> emptyAudio(0, 0);
+    p.processBlock(emptyAudio, midi);
+
+    std::cout << "openBassSpace v2.1.1 checks passed and screenshot saved to " << outPath << "\n";
     return 0;
 }

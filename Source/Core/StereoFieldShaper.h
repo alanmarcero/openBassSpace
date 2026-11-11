@@ -6,7 +6,7 @@ namespace analog_master::core {
 
 class StereoFieldShaper {
 public:
-    StereoFieldShaper() = default;
+    StereoFieldShaper();
 
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;

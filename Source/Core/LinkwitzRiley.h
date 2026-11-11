@@ -14,7 +14,7 @@ struct CrossoverSplit {
 // Low-pass and High-pass outputs sum to flat unity magnitude.
 class LinkwitzRiley4 {
 public:
-    LinkwitzRiley4() = default;
+    LinkwitzRiley4();
 
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;
