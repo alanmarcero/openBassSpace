@@ -40,8 +40,14 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
+    const int totalNumInputChannels = getTotalNumInputChannels();
+    const int totalNumOutputChannels = getTotalNumOutputChannels();
 
-    if (numChannels < 2 || numSamples == 0) {
+    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i) {
+        buffer.clear(i, 0, numSamples);
+    }
+
+    if (numChannels == 0 || numSamples == 0 || totalNumInputChannels == 0) {
         return;
     }
 
@@ -52,7 +58,7 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     shaper_.setWidth(widthRatio);
 
     float* left = buffer.getWritePointer(0);
-    float* right = buffer.getWritePointer(1);
+    float* right = (numChannels > 1 && totalNumInputChannels > 1) ? buffer.getWritePointer(1) : nullptr;
     shaper_.processBlock(left, right, numSamples);
 }
 

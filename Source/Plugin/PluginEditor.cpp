@@ -122,7 +122,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     // Version label right
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     g.setColour(kTextDim);
-    g.drawText("v2.0.0", header, juce::Justification::centredRight);
+    g.drawText("v" JucePlugin_VersionString, header, juce::Justification::centredRight);
 
     // Center Display Monitor
     auto centerArea = juce::Rectangle<float>(200, 95, 160, 175);
@@ -139,8 +139,9 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     // Center mono beam line
     g.setColour(kTextDim.withAlpha(0.35f));
+    const float dashes[] = { 4.0f, 4.0f };
     g.drawDashedLine(juce::Line<float>(arcCentre.x, arcCentre.y - 45.0f, arcCentre.x, arcCentre.y + 10.0f),
-                     nullptr, 0, 1.0f);
+                     dashes, 2, 1.0f);
 
     // Stereo vector wings
     juce::Path wings;
