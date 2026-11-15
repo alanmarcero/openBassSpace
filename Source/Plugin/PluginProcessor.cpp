@@ -9,10 +9,12 @@ BassSpaceProcessor::BassSpaceProcessor()
                  bass_space::params::createParameterLayout()) {
     freqParam_ = parameters.getRawParameterValue(bass_space::params::kFrequency);
     widthParam_ = parameters.getRawParameterValue(bass_space::params::kWidth);
+    outputDbParam_ = parameters.getRawParameterValue(bass_space::params::kOutputDb);
 }
 
 void BassSpaceProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
     shaper_.prepare(sampleRate);
+    outputGain_.reset(sampleRate, 0.02);
     reset();
 }
 
@@ -22,6 +24,8 @@ void BassSpaceProcessor::releaseResources() {
 
 void BassSpaceProcessor::reset() {
     shaper_.reset();
+    const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
+    outputGain_.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(decibels));
 }
 
 bool BassSpaceProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -60,6 +64,17 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     float* left = buffer.getWritePointer(0);
     float* right = (numChannels > 1 && totalNumInputChannels > 1) ? buffer.getWritePointer(1) : nullptr;
     shaper_.processBlock(left, right, numSamples);
+
+    const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
+    outputGain_.setTargetValue(juce::Decibels::decibelsToGain(decibels));
+    float* channels[2] = { buffer.getWritePointer(0),
+                           numChannels > 1 ? buffer.getWritePointer(1) : nullptr };
+    for (int sample = 0; sample < numSamples; ++sample) {
+        const float gain = outputGain_.getNextValue();
+        for (int channel = 0; channel < numChannels; ++channel) {
+            channels[channel][sample] *= gain;
+        }
+    }
 }
 
 juce::AudioProcessorEditor* BassSpaceProcessor::createEditor() {

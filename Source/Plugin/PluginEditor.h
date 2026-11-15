@@ -17,13 +17,16 @@ private:
     BassSpaceProcessor& processor_;
     juce::Slider freqSlider_;
     juce::Slider widthSlider_;
+    juce::Slider outputDbSlider_;
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label freqValueLabel_;
     juce::Label widthValueLabel_;
+    juce::Label outputDbLabel_;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> freqAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> widthAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputDbAttachment_;
 
     juce::Image faceplate_;
 

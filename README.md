@@ -17,6 +17,8 @@ openBassSpace controls the stereo width of low frequencies:
 
 Frequencies above the crossover are recombined with flat frequency response and zero phase cancellation.
 
+The Output knob provides automatable post-shaper gain from -24 dB to +12 dB, with 0 dB as the default.
+
 ## Formats
 - VST3
 - Audio Unit (AU)

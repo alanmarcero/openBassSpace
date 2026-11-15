@@ -25,6 +25,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         juce::AudioParameterFloatAttributes().withLabel("%")
     ));
 
+    // Post-shaper output gain in decibels
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ kOutputDb, 1 },
+        "Output",
+        juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")
+    ));
+
     return { parameters.begin(), parameters.end() };
 }
 

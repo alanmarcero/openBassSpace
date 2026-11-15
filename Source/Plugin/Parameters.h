@@ -6,6 +6,7 @@ namespace bass_space::params {
 
 inline constexpr const char* kFrequency = "frequency";
 inline constexpr const char* kWidth = "width";
+inline constexpr const char* kOutputDb = "output_db";
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

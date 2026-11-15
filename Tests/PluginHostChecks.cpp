@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <cmath>
 #include <iostream>
 
 static void require(bool b, const char* message) {
@@ -27,11 +28,79 @@ int main(int argc, char** argv) {
     p.setRateAndBufferSizeDetails(48000, 256);
     p.prepareToPlay(48000, 256);
 
+    auto* outputDb = p.parameters.getParameter("output_db");
+    require(outputDb != nullptr, "Output dB parameter missing");
+    require(outputDb->isAutomatable(), "Output dB parameter is automatable");
+    require(std::abs(p.parameters.getRawParameterValue("output_db")->load()) < 0.001f,
+            "Output dB defaults to unity");
+
+    outputDb->setValueNotifyingHost(outputDb->convertTo0to1(-6.0f));
+    juce::MemoryBlock savedState;
+    p.getStateInformation(savedState);
+    BassSpaceProcessor restored;
+    restored.setStateInformation(savedState.getData(), static_cast<int>(savedState.getSize()));
+    require(std::abs(restored.parameters.getRawParameterValue("output_db")->load() + 6.0f) < 0.01f,
+            "Output dB is saved with the session");
+
+    const auto renderRms = [](float outputDbValue) {
+        BassSpaceProcessor processor;
+        processor.setRateAndBufferSizeDetails(48000, 512);
+        processor.prepareToPlay(48000, 512);
+        auto* parameter = processor.parameters.getParameter("output_db");
+        require(parameter != nullptr, "Output dB parameter missing from render processor");
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(outputDbValue));
+
+        juce::AudioBuffer<float> signal(2, 512);
+        juce::MidiBuffer noMidi;
+        float sumSquares = 0.0f;
+        for (int block = 0; block < 20; ++block) {
+            for (int sample = 0; sample < signal.getNumSamples(); ++sample) {
+                const auto position = static_cast<float>(block * signal.getNumSamples() + sample);
+                const float value = 0.4f * std::sin(2.0f * 3.14159265f * 440.0f * position / 48000.0f);
+                signal.setSample(0, sample, value);
+                signal.setSample(1, sample, value);
+            }
+            processor.processBlock(signal, noMidi);
+            if (block == 19) {
+                for (int sample = 0; sample < signal.getNumSamples(); ++sample) {
+                    const float value = signal.getSample(0, sample);
+                    sumSquares += value * value;
+                }
+            }
+        }
+        return std::sqrt(sumSquares / static_cast<float>(signal.getNumSamples()));
+    };
+    const float levelRatio = renderRms(-6.0f) / renderRms(0.0f);
+    require(std::abs(levelRatio - 0.501187f) < 0.01f, "-6 dB output halves amplitude");
+
+    BassSpaceProcessor stepProcessor;
+    stepProcessor.setRateAndBufferSizeDetails(48000, 512);
+    stepProcessor.prepareToPlay(48000, 512);
+    auto* stepOutputDb = stepProcessor.parameters.getParameter("output_db");
+    require(stepOutputDb != nullptr, "Output dB parameter missing from step processor");
+    juce::AudioBuffer<float> steadySignal(2, 512);
+    juce::MidiBuffer noMidi;
+    for (int block = 0; block < 4; ++block) {
+        steadySignal.clear();
+        std::fill_n(steadySignal.getWritePointer(0), steadySignal.getNumSamples(), 0.1f);
+        std::fill_n(steadySignal.getWritePointer(1), steadySignal.getNumSamples(), 0.1f);
+        stepProcessor.processBlock(steadySignal, noMidi);
+    }
+    const float previousOutput = steadySignal.getSample(0, steadySignal.getNumSamples() - 1);
+    stepOutputDb->setValueNotifyingHost(stepOutputDb->convertTo0to1(12.0f));
+    steadySignal.clear();
+    std::fill_n(steadySignal.getWritePointer(0), steadySignal.getNumSamples(), 0.1f);
+    std::fill_n(steadySignal.getWritePointer(1), steadySignal.getNumSamples(), 0.1f);
+    stepProcessor.processBlock(steadySignal, noMidi);
+    require(std::abs(steadySignal.getSample(0, 0) - previousOutput) < 0.01f,
+            "Output dB changes are smoothed");
+
+    outputDb->setValueNotifyingHost(outputDb->convertTo0to1(0.0f));
     std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
     pump();
 
     require(editor != nullptr, "Editor creation failed");
-    require(editor->getWidth() == 560 && editor->getHeight() == 360, "editor size match");
+    require(editor->getWidth() == 760 && editor->getHeight() == 480, "editor size match");
 
     const juce::String outPath = argc > 1 ? juce::String(argv[1]) : "assets/native-ui.png";
     save(*editor, outPath);
@@ -79,6 +148,6 @@ int main(int argc, char** argv) {
     juce::AudioBuffer<float> emptyAudio(0, 0);
     p.processBlock(emptyAudio, midi);
 
-    std::cout << "openBassSpace v2.1.1 checks passed and screenshot saved to " << outPath << "\n";
+    std::cout << "openBassSpace v2.2.0 checks passed and screenshot saved to " << outPath << "\n";
     return 0;
 }

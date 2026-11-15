@@ -46,6 +46,8 @@ public:
 private:
     std::atomic<float>* freqParam_ = nullptr;
     std::atomic<float>* widthParam_ = nullptr;
+    std::atomic<float>* outputDbParam_ = nullptr;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outputGain_;
     analog_master::core::StereoFieldShaper shaper_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceProcessor)

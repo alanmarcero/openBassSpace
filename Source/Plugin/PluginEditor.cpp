@@ -74,7 +74,27 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     widthAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor_.parameters, bass_space::params::kWidth, widthSlider_);
 
-    setSize(560, 360);
+    outputDbSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    outputDbSlider_.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 80, 22);
+    outputDbSlider_.setColour(juce::Slider::rotarySliderFillColourId, kAccentMint);
+    outputDbSlider_.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
+    outputDbSlider_.setColour(juce::Slider::thumbColourId, kTextWhite);
+    outputDbSlider_.setColour(juce::Slider::textBoxTextColourId, kAccentMint);
+    outputDbSlider_.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    outputDbSlider_.setDoubleClickReturnValue(true, 0.0);
+    outputDbSlider_.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
+    addAndMakeVisible(outputDbSlider_);
+
+    outputDbAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor_.parameters, bass_space::params::kOutputDb, outputDbSlider_);
+
+    outputDbLabel_.setText("OUTPUT dB", juce::dontSendNotification);
+    outputDbLabel_.setJustificationType(juce::Justification::centred);
+    outputDbLabel_.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    outputDbLabel_.setColour(juce::Label::textColourId, kTextWhite);
+    addAndMakeVisible(outputDbLabel_);
+
+    setSize(760, 480);
     startTimerHz(30);
 }
 
@@ -125,7 +145,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     g.drawText("v" JucePlugin_VersionString, header, juce::Justification::centredRight);
 
     // Center Display Monitor
-    auto centerArea = juce::Rectangle<float>(200, 95, 160, 175);
+    auto centerArea = juce::Rectangle<float>(300, 95, 160, 175);
     drawGlow(g, centerArea, (processor_.currentWidth() > 105.0f ? kAccentGold : kAccentMint).withAlpha(0.08f));
     g.setColour(kPanel);
     g.fillRoundedRectangle(centerArea, 8.0f);
@@ -200,4 +220,7 @@ void BassSpaceEditor::resized() {
 
     widthSlider_.setBounds(getWidth() - 40 - knobSize, knobY, knobSize, knobSize + 24);
     widthLabel_.setBounds(getWidth() - 40 - knobSize, knobY + knobSize + 28, knobSize, 18);
+
+    outputDbSlider_.setBounds((getWidth() - 100) / 2, 292, 100, 124);
+    outputDbLabel_.setBounds((getWidth() - 140) / 2, 416, 140, 20);
 }
