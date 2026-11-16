@@ -25,6 +25,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         juce::AudioParameterFloatAttributes().withLabel("%")
     ));
 
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ kUpperWidth, 1 },
+        "Upper Width",
+        widthRange,
+        100.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")
+    ));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ kStereoize, 1 },
+        "Stereoize",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")
+    ));
+
     // Post-shaper output gain in decibels
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ kOutputDb, 1 },

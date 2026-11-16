@@ -41,12 +41,27 @@ public:
         return widthParam_ != nullptr ? widthParam_->load(std::memory_order_relaxed) : 0.0f;
     }
 
+    [[nodiscard]] float currentUpperWidth() const noexcept {
+        return upperWidthParam_ != nullptr ? upperWidthParam_->load(std::memory_order_relaxed) : 100.0f;
+    }
+
+    [[nodiscard]] float currentStereoize() const noexcept {
+        return stereoizeParam_ != nullptr ? stereoizeParam_->load(std::memory_order_relaxed) : 0.0f;
+    }
+
+    [[nodiscard]] float currentCorrelation() const noexcept {
+        return correlation_.load(std::memory_order_relaxed);
+    }
+
     juce::AudioProcessorValueTreeState parameters;
 
 private:
     std::atomic<float>* freqParam_ = nullptr;
     std::atomic<float>* widthParam_ = nullptr;
+    std::atomic<float>* upperWidthParam_ = nullptr;
+    std::atomic<float>* stereoizeParam_ = nullptr;
     std::atomic<float>* outputDbParam_ = nullptr;
+    std::atomic<float> correlation_ {0.0f};
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outputGain_;
     analog_master::core::StereoFieldShaper shaper_;
 

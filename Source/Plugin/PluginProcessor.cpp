@@ -9,6 +9,8 @@ BassSpaceProcessor::BassSpaceProcessor()
                  bass_space::params::createParameterLayout()) {
     freqParam_ = parameters.getRawParameterValue(bass_space::params::kFrequency);
     widthParam_ = parameters.getRawParameterValue(bass_space::params::kWidth);
+    upperWidthParam_ = parameters.getRawParameterValue(bass_space::params::kUpperWidth);
+    stereoizeParam_ = parameters.getRawParameterValue(bass_space::params::kStereoize);
     outputDbParam_ = parameters.getRawParameterValue(bass_space::params::kOutputDb);
 }
 
@@ -26,6 +28,7 @@ void BassSpaceProcessor::reset() {
     shaper_.reset();
     const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
     outputGain_.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(decibels));
+    correlation_.store(0.0f, std::memory_order_relaxed);
 }
 
 bool BassSpaceProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -60,6 +63,8 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     shaper_.setCrossoverFrequency(freq);
     shaper_.setWidth(widthRatio);
+    shaper_.setUpperWidth(currentUpperWidth() * 0.01f);
+    shaper_.setStereoizeAmount(currentStereoize() * 0.01f);
 
     float* left = buffer.getWritePointer(0);
     float* right = (numChannels > 1 && totalNumInputChannels > 1) ? buffer.getWritePointer(1) : nullptr;
@@ -69,12 +74,23 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     outputGain_.setTargetValue(juce::Decibels::decibelsToGain(decibels));
     float* channels[2] = { buffer.getWritePointer(0),
                            numChannels > 1 ? buffer.getWritePointer(1) : nullptr };
+    double cross = 0.0;
+    double leftEnergy = 0.0;
+    double rightEnergy = 0.0;
     for (int sample = 0; sample < numSamples; ++sample) {
         const float gain = outputGain_.getNextValue();
         for (int channel = 0; channel < numChannels; ++channel) {
             channels[channel][sample] *= gain;
         }
+        const double leftValue = channels[0][sample];
+        const double rightValue = channels[1] != nullptr ? channels[1][sample] : leftValue;
+        cross += leftValue * rightValue;
+        leftEnergy += leftValue * leftValue;
+        rightEnergy += rightValue * rightValue;
     }
+    correlation_.store(static_cast<float>(analog_master::core::StereoFieldShaper::correlationCoefficient(
+                            cross, leftEnergy, rightEnergy)),
+                        std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* BassSpaceProcessor::createEditor() {

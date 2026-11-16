@@ -57,19 +57,19 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     freqValueLabel_.setColour(juce::Label::textColourId, kAccentMint);
     addAndMakeVisible(freqValueLabel_);
 
-    // Width knob
+    // Bass width knob
     widthSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     widthSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     widthSlider_.setColour(juce::Slider::rotarySliderFillColourId, kAccentGold);
     widthSlider_.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
     widthSlider_.setColour(juce::Slider::thumbColourId, kTextWhite);
     widthSlider_.setDoubleClickReturnValue(true, 100.0);
-    widthSlider_.setTitle("Stereo width");
-    widthSlider_.setDescription("Sets the stereo width above the crossover frequency.");
-    widthSlider_.setTooltip("Set the stereo width above the crossover frequency.");
+    widthSlider_.setTitle("Bass stereo width");
+    widthSlider_.setDescription("Sets the stereo width below the crossover frequency.");
+    widthSlider_.setTooltip("Set the bass stereo width below the crossover frequency.");
     addAndMakeVisible(widthSlider_);
 
-    widthLabel_.setText("Stereo width", juce::dontSendNotification);
+    widthLabel_.setText("Bass width", juce::dontSendNotification);
     widthLabel_.setJustificationType(juce::Justification::centred);
     widthLabel_.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     widthLabel_.setColour(juce::Label::textColourId, kTextWhite);
@@ -80,10 +80,70 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     widthValueLabel_.setColour(juce::Label::textColourId, kAccentGold);
     addAndMakeVisible(widthValueLabel_);
 
+    upperWidthSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    upperWidthSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    upperWidthSlider_.setColour(juce::Slider::rotarySliderFillColourId, kAccentGold);
+    upperWidthSlider_.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
+    upperWidthSlider_.setColour(juce::Slider::thumbColourId, kTextWhite);
+    upperWidthSlider_.setDoubleClickReturnValue(true, 100.0);
+    upperWidthSlider_.setTitle("Upper-band width");
+    upperWidthSlider_.setDescription("Sets stereo width above the crossover frequency.");
+    upperWidthSlider_.setTooltip("Set stereo width above the crossover frequency.");
+    addAndMakeVisible(upperWidthSlider_);
+
+    upperWidthLabel_.setText("Upper width", juce::dontSendNotification);
+    upperWidthLabel_.setJustificationType(juce::Justification::centred);
+    upperWidthLabel_.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    upperWidthLabel_.setColour(juce::Label::textColourId, kTextWhite);
+    addAndMakeVisible(upperWidthLabel_);
+
+    upperWidthValueLabel_.setJustificationType(juce::Justification::centred);
+    upperWidthValueLabel_.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    upperWidthValueLabel_.setColour(juce::Label::textColourId, kAccentGold);
+    addAndMakeVisible(upperWidthValueLabel_);
+
+    stereoizeSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    stereoizeSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    stereoizeSlider_.setColour(juce::Slider::rotarySliderFillColourId, kAccentMint);
+    stereoizeSlider_.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
+    stereoizeSlider_.setColour(juce::Slider::thumbColourId, kTextWhite);
+    stereoizeSlider_.setDoubleClickReturnValue(true, 0.0);
+    stereoizeSlider_.setTitle("Stereoize");
+    stereoizeSlider_.setDescription("Adds a mono-compatible decorrelated side signal above the crossover.");
+    stereoizeSlider_.setTooltip("Add a decorrelated side signal above the crossover. The bass remains centered.");
+    addAndMakeVisible(stereoizeSlider_);
+
+    stereoizeLabel_.setText("Stereoize", juce::dontSendNotification);
+    stereoizeLabel_.setJustificationType(juce::Justification::centred);
+    stereoizeLabel_.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    stereoizeLabel_.setColour(juce::Label::textColourId, kTextWhite);
+    addAndMakeVisible(stereoizeLabel_);
+
+    stereoizeValueLabel_.setJustificationType(juce::Justification::centred);
+    stereoizeValueLabel_.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    stereoizeValueLabel_.setColour(juce::Label::textColourId, kAccentMint);
+    addAndMakeVisible(stereoizeValueLabel_);
+
+    correlationLabel_.setText("Correlation", juce::dontSendNotification);
+    correlationLabel_.setJustificationType(juce::Justification::centredLeft);
+    correlationLabel_.setFont(juce::FontOptions(9.0f, juce::Font::bold));
+    correlationLabel_.setColour(juce::Label::textColourId, kTextDim);
+    addAndMakeVisible(correlationLabel_);
+
+    correlationValueLabel_.setComponentID("correlationValue");
+    correlationValueLabel_.setJustificationType(juce::Justification::centredRight);
+    correlationValueLabel_.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    correlationValueLabel_.setColour(juce::Label::textColourId, kAccentMint);
+    addAndMakeVisible(correlationValueLabel_);
+
     freqAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor_.parameters, bass_space::params::kFrequency, freqSlider_);
     widthAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor_.parameters, bass_space::params::kWidth, widthSlider_);
+    upperWidthAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor_.parameters, bass_space::params::kUpperWidth, upperWidthSlider_);
+    stereoizeAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor_.parameters, bass_space::params::kStereoize, stereoizeSlider_);
 
     outputDbSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     outputDbSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
@@ -127,6 +187,9 @@ void BassSpaceEditor::timerCallback() {
 void BassSpaceEditor::updateValueLabels() {
     freqValueLabel_.setText(juce::String(juce::roundToInt(freqSlider_.getValue())) + " Hz", juce::dontSendNotification);
     widthValueLabel_.setText(juce::String(juce::roundToInt(widthSlider_.getValue())) + "%", juce::dontSendNotification);
+    upperWidthValueLabel_.setText(juce::String(juce::roundToInt(upperWidthSlider_.getValue())) + "%", juce::dontSendNotification);
+    stereoizeValueLabel_.setText(juce::String(juce::roundToInt(stereoizeSlider_.getValue())) + "%", juce::dontSendNotification);
+    correlationValueLabel_.setText(juce::String(processor_.currentCorrelation(), 2), juce::dontSendNotification);
     outputDbValueLabel_.setText(juce::String(outputDbSlider_.getValue(), 1) + " dB", juce::dontSendNotification);
 }
 
@@ -179,7 +242,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     // Center Display Monitor
     auto centerArea = juce::Rectangle<float>(270, 88, 220, 192);
-    const auto fieldAccent = (processor_.currentWidth() > 105.0f ? kAccentGold : kAccentMint);
+    const auto fieldAccent = (processor_.currentUpperWidth() > 105.0f ? kAccentGold : kAccentMint);
     drawGlow(g, centerArea, fieldAccent.withAlpha(0.07f));
     g.setColour(kPanel);
     g.fillRoundedRectangle(centerArea, 5.0f);
@@ -192,7 +255,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     // Stereo spread arc visualization
     const auto arcCentre = juce::Point<float>(centerArea.getCentreX(), centerArea.getY() + 88.0f);
-    const float currentW = processor_.currentWidth();
+    const float currentW = processor_.currentUpperWidth();
     const float spreadAngle = (currentW / 200.0f) * (std::numbers::pi_v<float> * 0.42f);
 
     // Center mono beam line
@@ -221,15 +284,15 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     juce::String modeText = "100% FLAT";
     juce::Colour modeCol = kTextWhite;
     if (currentW < 5.0f) {
-        modeText = "0% PURE MONO";
+        modeText = "UPPER BAND MONO";
         modeCol = kAccentMint;
     }
     if (currentW >= 5.0f && currentW < 95.0f) {
-        modeText = "MONO FOCUSED";
+        modeText = "UPPER BAND NARROW";
         modeCol = kAccentMint.withAlpha(0.85f);
     }
     if (currentW > 105.0f) {
-        modeText = "STEREO EXPANDED";
+        modeText = "UPPER BAND WIDE";
         modeCol = kAccentGold;
     }
 
@@ -239,8 +302,20 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     g.setFont(juce::FontOptions(9.5f));
     g.setColour(kTextDim);
-    g.drawText("Low band mono below " + juce::String(juce::roundToInt(processor_.currentFrequency())) + " Hz",
+    g.drawText("Bass " + juce::String(juce::roundToInt(processor_.currentWidth())) + "%  |  upper band above "
+                   + juce::String(juce::roundToInt(processor_.currentFrequency())) + " Hz",
                centerArea.withY(241.0f).withHeight(16.0f), juce::Justification::centred);
+
+    const float correlation = juce::jlimit(-1.0f, 1.0f, processor_.currentCorrelation());
+    const juce::Rectangle<float> correlationTrack {315.0f, 275.0f, 130.0f, 4.0f};
+    g.setColour(kPanelEdge);
+    g.fillRoundedRectangle(correlationTrack, 2.0f);
+    g.setColour(correlation < 0.0f ? kAccentGold : kAccentMint);
+    const float correlationEnd = correlationTrack.getCentreX() + correlation * 60.0f;
+    g.fillRoundedRectangle(juce::Rectangle<float>(std::min(correlationTrack.getCentreX(), correlationEnd),
+                                                  correlationTrack.getY(),
+                                                  std::abs(correlationEnd - correlationTrack.getCentreX()),
+                                                  correlationTrack.getHeight()), 2.0f);
 
     const auto masterStrip = juce::Rectangle<float>(220.0f, 296.0f, 320.0f, 144.0f);
     g.setColour(kPanel.withAlpha(0.78f));
@@ -254,7 +329,8 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     const auto footer = getLocalBounds().removeFromBottom(30);
     g.setFont(juce::FontOptions(9.5f));
     g.setColour(kTextDim);
-    g.drawText("4th-order Linkwitz-Riley  |  low band mono  |  high band width", footer, juce::Justification::centred);
+    g.drawText("4th-order Linkwitz-Riley  |  independent bass and upper width  |  mono-compatible stereoize",
+               footer, juce::Justification::centred);
 }
 
 void BassSpaceEditor::resized() {
@@ -271,6 +347,17 @@ void BassSpaceEditor::resized() {
     widthLabel_.setBounds(widthX, 91, sideColumnWidth, 18);
     widthSlider_.setBounds(widthX + (sideColumnWidth - knobSize) / 2, knobY, knobSize, knobSize);
     widthValueLabel_.setBounds(widthX, knobY + knobSize + 2, sideColumnWidth, 22);
+
+    upperWidthLabel_.setBounds(widthX, 266, sideColumnWidth, 16);
+    upperWidthSlider_.setBounds(widthX + (sideColumnWidth - 116) / 2, 282, 116, 116);
+    upperWidthValueLabel_.setBounds(widthX, 400, sideColumnWidth, 18);
+
+    stereoizeLabel_.setBounds(36, 276, sideColumnWidth, 16);
+    stereoizeSlider_.setBounds(72, 292, 116, 116);
+    stereoizeValueLabel_.setBounds(36, 410, sideColumnWidth, 18);
+
+    correlationLabel_.setBounds(292, 260, 92, 14);
+    correlationValueLabel_.setBounds(386, 260, 72, 14);
 
     outputDbLabel_.setBounds((getWidth() - 180) / 2, 302, 180, 18);
     outputDbSlider_.setBounds((getWidth() - 112) / 2, 326, 112, 78);
