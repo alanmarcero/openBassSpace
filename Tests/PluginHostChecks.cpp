@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -20,6 +21,21 @@ static void save(juce::Component& c, const juce::String& path) {
     require(juce::PNGImageFormat().writeImageToStream(
                 c.createComponentSnapshot(c.getLocalBounds(), true, 2.0f), out),
             "capture failed");
+}
+
+static bool hasVisibleLabel(juce::Component& component, const juce::String& text) {
+    return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&text](auto* child) {
+        auto* label = dynamic_cast<juce::Label*>(child);
+        return label != nullptr && label->getText() == text && label->isVisible()
+            && !label->getBounds().isEmpty();
+    });
+}
+
+static bool hasSliderTitle(juce::Component& component, const juce::String& title) {
+    return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&title](auto* child) {
+        auto* slider = dynamic_cast<juce::Slider*>(child);
+        return slider != nullptr && slider->getTitle() == title;
+    });
 }
 
 int main(int argc, char** argv) {
@@ -101,6 +117,15 @@ int main(int argc, char** argv) {
 
     require(editor != nullptr, "Editor creation failed");
     require(editor->getWidth() == 760 && editor->getHeight() == 480, "editor size match");
+    require(hasVisibleLabel(*editor, "Crossover"), "Crossover section label is visible");
+    require(hasVisibleLabel(*editor, "Stereo width"), "Stereo width section label is visible");
+    require(hasVisibleLabel(*editor, "Output dB"), "Output dB section label is visible");
+    require(hasVisibleLabel(*editor, "120 Hz"), "Crossover value includes frequency units");
+    require(hasVisibleLabel(*editor, "0%"), "Stereo width value includes percent units");
+    require(hasVisibleLabel(*editor, "0.0 dB"), "Output value includes decibel units");
+    require(hasSliderTitle(*editor, "Crossover frequency"), "Crossover control has an accessibility title");
+    require(hasSliderTitle(*editor, "Stereo width"), "Width control has an accessibility title");
+    require(hasSliderTitle(*editor, "Output level"), "Output control has an accessibility title");
 
     const juce::String outPath = argc > 1 ? juce::String(argv[1]) : "assets/native-ui.png";
     save(*editor, outPath);
@@ -148,6 +173,7 @@ int main(int argc, char** argv) {
     juce::AudioBuffer<float> emptyAudio(0, 0);
     p.processBlock(emptyAudio, midi);
 
-    std::cout << "openBassSpace v2.2.0 checks passed and screenshot saved to " << outPath << "\n";
+    std::cout << "openBassSpace v" << JucePlugin_VersionString
+              << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;
 }
