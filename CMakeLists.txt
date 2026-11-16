@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(openBassSpace VERSION 2.2.1 LANGUAGES C CXX)
+project(openBassSpace VERSION 2.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,6 +80,9 @@ if(OBS_BUILD_PLUGIN)
     target_include_directories(open_bass_space_capture PRIVATE Source/Plugin Source/Core)
     target_link_libraries(open_bass_space_capture PRIVATE openBassSpace juce::juce_audio_utils)
     target_compile_definitions(open_bass_space_capture PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+    if(OBS_BUILD_TESTS)
+        add_test(NAME native_editor COMMAND open_bass_space_capture "${CMAKE_BINARY_DIR}/screenshots/native-ui.png")
+    endif()
 endif()
 
 if(OBS_BUILD_TESTS)

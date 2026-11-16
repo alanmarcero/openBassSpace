@@ -190,3 +190,69 @@ TEST_CASE("StereoFieldShaper keeps mono low frequencies centered when width is 2
     REQUIRE(maxStereoDiff < 1e-4f);
     REQUIRE_THAT(maxMonoPeak, WithinAbs(1.0f, 0.02f));
 }
+
+TEST_CASE("StereoFieldShaper independently narrows the upper band", "[stereo][imager]") {
+    StereoFieldShaper shaper;
+    shaper.prepare(48000.0);
+    shaper.setCrossoverFrequency(150.0);
+    shaper.setWidth(1.0f);
+    shaper.setUpperWidth(0.0f);
+
+    std::vector<float> left(4096);
+    std::vector<float> right(4096);
+    for (size_t sample = 0; sample < left.size(); ++sample) {
+        const float value = static_cast<float>(std::sin(2.0 * std::numbers::pi * 5000.0 * sample / 48000.0));
+        left[sample] = value;
+        right[sample] = -value;
+    }
+    shaper.processBlock(left.data(), right.data(), static_cast<int>(left.size()));
+
+    float residual = 0.0f;
+    for (size_t sample = 1024; sample < left.size(); ++sample) {
+        residual += std::abs(left[sample] - right[sample]);
+    }
+    REQUIRE(residual / 3072.0f < 0.05f);
+}
+
+TEST_CASE("StereoFieldShaper stereoize adds upper side energy without changing the mono fold", "[stereo][imager]") {
+    StereoFieldShaper control;
+    StereoFieldShaper widened;
+    control.prepare(48000.0);
+    widened.prepare(48000.0);
+    control.setCrossoverFrequency(150.0);
+    widened.setCrossoverFrequency(150.0);
+    control.setWidth(1.0f);
+    widened.setWidth(1.0f);
+    widened.setStereoizeAmount(1.0f);
+
+    std::vector<float> controlLeft(4096);
+    std::vector<float> controlRight(4096);
+    std::vector<float> wideLeft(4096);
+    std::vector<float> wideRight(4096);
+    for (size_t sample = 0; sample < controlLeft.size(); ++sample) {
+        const float value = static_cast<float>(std::sin(2.0 * std::numbers::pi * 5000.0 * sample / 48000.0));
+        controlLeft[sample] = value;
+        controlRight[sample] = value;
+        wideLeft[sample] = value;
+        wideRight[sample] = value;
+    }
+    control.processBlock(controlLeft.data(), controlRight.data(), static_cast<int>(controlLeft.size()));
+    widened.processBlock(wideLeft.data(), wideRight.data(), static_cast<int>(wideLeft.size()));
+
+    float sideEnergy = 0.0f;
+    float foldError = 0.0f;
+    for (size_t sample = 1024; sample < wideLeft.size(); ++sample) {
+        sideEnergy += std::abs(wideLeft[sample] - wideRight[sample]);
+        const float controlMono = 0.5f * (controlLeft[sample] + controlRight[sample]);
+        const float wideMono = 0.5f * (wideLeft[sample] + wideRight[sample]);
+        foldError = std::max(foldError, std::abs(controlMono - wideMono));
+    }
+    REQUIRE(sideEnergy / 3072.0f > 0.05f);
+    REQUIRE(foldError < 0.01f);
+}
+
+TEST_CASE("StereoFieldShaper correlation handles mono, polarity inversion, and silence", "[stereo][imager]") {
+    REQUIRE_THAT(StereoFieldShaper::correlationCoefficient(2.0, 2.0, 2.0), WithinAbs(1.0, 1e-12));
+    REQUIRE_THAT(StereoFieldShaper::correlationCoefficient(-2.0, 2.0, 2.0), WithinAbs(-1.0, 1e-12));
+    REQUIRE_THAT(StereoFieldShaper::correlationCoefficient(0.0, 0.0, 0.0), WithinAbs(0.0, 1e-12));
+}
