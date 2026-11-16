@@ -13,6 +13,7 @@ public:
 
 private:
     void timerCallback() override;
+    void updateValueLabels();
 
     BassSpaceProcessor& processor_;
     juce::Slider freqSlider_;
@@ -23,6 +24,7 @@ private:
     juce::Label freqValueLabel_;
     juce::Label widthValueLabel_;
     juce::Label outputDbLabel_;
+    juce::Label outputDbValueLabel_;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> freqAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> widthAttachment_;
