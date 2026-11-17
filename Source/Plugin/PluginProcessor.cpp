@@ -15,6 +15,7 @@ BassSpaceProcessor::BassSpaceProcessor()
 }
 
 void BassSpaceProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
+    processingRate_ = sampleRate;
     shaper_.prepare(sampleRate);
     outputGain_.reset(sampleRate, 0.02);
     reset();
@@ -25,6 +26,7 @@ void BassSpaceProcessor::releaseResources() {
 }
 
 void BassSpaceProcessor::reset() {
+    artworkClock_.reset();
     shaper_.reset();
     const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
     outputGain_.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(decibels));
@@ -47,6 +49,9 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
+    auto* playHead = getPlayHead();
+    artworkClock_.update(playHead ? playHead->getPosition() : juce::Optional<juce::AudioPlayHead::PositionInfo>{},
+                         numSamples, processingRate_);
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
 

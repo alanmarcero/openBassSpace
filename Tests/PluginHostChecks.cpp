@@ -163,6 +163,38 @@ int main(int argc, char** argv) {
     require(hasSliderTitle(*editor, "Stereoize"), "Stereoize control has an accessibility title");
     require(hasSliderTitle(*editor, "Output level"), "Output control has an accessibility title");
 
+    struct Host : juce::AudioPlayHead {
+        PositionInfo position;
+        juce::Optional<PositionInfo> getPosition() const override { return position; }
+    } host;
+    p.setPlayHead(&host);
+    juce::AudioBuffer<float> clockAudio(2, 256);
+    juce::MidiBuffer clockMidi;
+    clockAudio.clear();
+    host.position.setIsPlaying(true);
+    host.position.setBpm(140.0);
+    host.position.setPpqPosition(-1.75);
+    p.processBlock(clockAudio, clockMidi);
+    require(std::abs(p.artworkPhase() - 0.25f) < 0.0001f, "SVG follows a negative host position");
+    const auto onbeat = editor->createComponentSnapshot(juce::Rectangle<int>(292, 140, 175, 77));
+    host.position.setPpqPosition(22.875);
+    p.processBlock(clockAudio, clockMidi);
+    require(std::abs(p.artworkPhase() - 0.875f) < 0.0001f, "SVG follows a host seek");
+    const auto offbeat = editor->createComponentSnapshot(juce::Rectangle<int>(292, 140, 175, 77));
+    int changed = 0;
+    for (int y = 0; y < onbeat.getHeight(); ++y)
+        for (int x = 0; x < onbeat.getWidth(); ++x)
+            if (onbeat.getPixelAt(x, y) != offbeat.getPixelAt(x, y)) ++changed;
+    require(changed > 30, "Native SVG pixels move with beat phase");
+    host.position.setIsPlaying(false);
+    host.position.setPpqPosition(0);
+    p.processBlock(clockAudio, clockMidi);
+    require(std::abs(p.artworkPhase() - 0.875f) < 0.0001f, "SVG holds phase when the host stops");
+    p.setPlayHead(nullptr);
+    p.processBlock(clockAudio, clockMidi);
+    p.processBlock(clockAudio, clockMidi);
+    require(p.artworkPhase() > 0.875f, "SVG advances on audio time without host transport");
+
     const juce::String outPath = argc > 1 ? juce::String(argv[1]) : "assets/native-ui.png";
     save(*editor, outPath);
 

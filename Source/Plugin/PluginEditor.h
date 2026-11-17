@@ -16,6 +16,8 @@ private:
     void updateValueLabels();
 
     BassSpaceProcessor& processor_;
+    juce::LookAndFeel_V4 theme_;
+    juce::TooltipWindow tooltips_ {this, 600};
     juce::Slider freqSlider_;
     juce::Slider widthSlider_;
     juce::Slider upperWidthSlider_;
@@ -40,6 +42,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> stereoizeAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputDbAttachment_;
 
+    std::unique_ptr<juce::Drawable> stereoField_;
     juce::Image faceplate_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceEditor)
