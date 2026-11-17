@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ArtworkBeatClock.h"
 #include "Parameters.h"
 #include "StereoFieldShaper.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -53,6 +54,8 @@ public:
         return correlation_.load(std::memory_order_relaxed);
     }
 
+    float artworkPhase() const noexcept { return artworkClock_.currentPhase(); }
+
     juce::AudioProcessorValueTreeState parameters;
 
 private:
@@ -61,6 +64,8 @@ private:
     std::atomic<float>* upperWidthParam_ = nullptr;
     std::atomic<float>* stereoizeParam_ = nullptr;
     std::atomic<float>* outputDbParam_ = nullptr;
+    ArtworkBeatClock artworkClock_;
+    double processingRate_ = 48000.0;
     std::atomic<float> correlation_ {0.0f};
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outputGain_;
     analog_master::core::StereoFieldShaper shaper_;
