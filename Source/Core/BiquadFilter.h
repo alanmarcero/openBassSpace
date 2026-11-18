@@ -49,12 +49,6 @@ public:
     }
 
     [[nodiscard]] float process(float sample) noexcept {
-        // Sanitize non-finite inputs (NaN / Inf protection)
-        if (!std::isfinite(sample)) {
-            reset();
-            return 0.0f;
-        }
-
         const double v0 = static_cast<double>(sample);
         const double v3 = v0 - ic2eq_;
         const double v1 = a1_ * ic1eq_ + a2_ * v3;
@@ -64,21 +58,10 @@ public:
         ic2eq_ = 2.0 * v2 - ic2eq_;
 
         const double out = m0_ * v0 + m1_ * v1 + m2_ * v2;
-
-        // Catch non-finite filter divergence / instability
         if (!std::isfinite(out)) {
             reset();
             return 0.0f;
         }
-
-        // Flush denormals
-        if (std::abs(ic1eq_) < 1e-25) {
-            ic1eq_ = 0.0;
-        }
-        if (std::abs(ic2eq_) < 1e-25) {
-            ic2eq_ = 0.0;
-        }
-
         return static_cast<float>(out);
     }
 
