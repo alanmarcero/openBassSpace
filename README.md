@@ -2,7 +2,7 @@
 
 Set bass and upper-band stereo width independently. Keep bass centered or widen highs.
 
-![openBassSpace editor](assets/native-ui.png)
+![openBassSpace editor](docs/screenshots/preview.png)
 
 [Latest release](https://github.com/alanmarcero/openBassSpace/releases/latest) · [Install with OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest)
 
