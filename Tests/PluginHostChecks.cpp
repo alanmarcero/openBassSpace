@@ -80,6 +80,9 @@ int main(int argc, char** argv) {
     auto legacyState = p.parameters.copyState();
     legacyState.removeChild(legacyState.getChildWithProperty("id", "upper_width"), nullptr);
     legacyState.removeChild(legacyState.getChildWithProperty("id", "stereoize"), nullptr);
+    legacyState.removeChild(legacyState.getChildWithProperty("id", "sub_drive"), nullptr);
+    legacyState.removeChild(legacyState.getChildWithProperty("id", "upper_tilt"), nullptr);
+    legacyState.removeChild(legacyState.getChildWithProperty("id", "solo_low"), nullptr);
     juce::MemoryBlock legacyStateData;
     juce::AudioProcessor::copyXmlToBinary(*legacyState.createXml(), legacyStateData);
     BassSpaceProcessor legacyRestored;
@@ -88,6 +91,12 @@ int main(int argc, char** argv) {
             "Legacy sessions default upper-band width to neutral");
     require(std::abs(legacyRestored.parameters.getRawParameterValue("stereoize")->load()) < 0.01f,
             "Legacy sessions default Stereoize off");
+    require(std::abs(legacyRestored.parameters.getRawParameterValue("sub_drive")->load()) < 0.01f,
+            "Legacy sessions default Sub Drive off");
+    require(std::abs(legacyRestored.parameters.getRawParameterValue("upper_tilt")->load()) < 0.01f,
+            "Legacy sessions default Upper Tilt flat");
+    require(std::abs(legacyRestored.parameters.getRawParameterValue("solo_low")->load()) < 0.01f,
+            "Legacy sessions default Solo Bass off");
 
     const auto renderRms = [](float outputDbValue) {
         BassSpaceProcessor processor;
@@ -152,6 +161,8 @@ int main(int argc, char** argv) {
     require(hasVisibleLabel(*editor, "Bass width"), "Bass width section label is visible");
     require(hasVisibleLabel(*editor, "Upper width"), "Upper-band width section label is visible");
     require(hasVisibleLabel(*editor, "Stereoize"), "Stereoize section label is visible");
+    require(hasVisibleLabel(*editor, "Sub drive"), "Sub drive section label is visible");
+    require(hasVisibleLabel(*editor, "Upper tilt"), "Upper tilt section label is visible");
     require(hasVisibleLabel(*editor, "Correlation"), "Correlation meter label is visible");
     require(hasVisibleLabel(*editor, "Output dB"), "Output dB section label is visible");
     require(hasVisibleLabel(*editor, "120 Hz"), "Crossover value includes frequency units");
@@ -161,6 +172,8 @@ int main(int argc, char** argv) {
     require(hasSliderTitle(*editor, "Bass stereo width"), "Bass width control has an accessibility title");
     require(hasSliderTitle(*editor, "Upper-band width"), "Upper-band width control has an accessibility title");
     require(hasSliderTitle(*editor, "Stereoize"), "Stereoize control has an accessibility title");
+    require(hasSliderTitle(*editor, "Sub harmonic drive"), "Sub drive control has an accessibility title");
+    require(hasSliderTitle(*editor, "Upper air tilt"), "Upper tilt control has an accessibility title");
     require(hasSliderTitle(*editor, "Output level"), "Output control has an accessibility title");
 
     struct Host : juce::AudioPlayHead {
@@ -304,6 +317,53 @@ int main(int argc, char** argv) {
     // Audio test: Zero-channel/zero-sample safety
     juce::AudioBuffer<float> emptyAudio(0, 0);
     p.processBlock(emptyAudio, midi);
+
+    // Enhancements test: Sub Drive, Upper Tilt, and Solo Bass
+    {
+        analog_master::core::StereoFieldShaper shaper;
+        shaper.prepare(48000.0);
+        shaper.setCrossoverFrequency(150.0);
+        shaper.setWidth(0.0f);
+        shaper.setSubDrive(0.8f);
+        float outL = 0.0f, outR = 0.0f;
+        for (int i = 0; i < 512; ++i) {
+            const float in = 0.6f * std::sin(2.0f * 3.14159265f * 60.0f * static_cast<float>(i) / 48000.0f);
+            shaper.processSample(in, in, outL, outR);
+        }
+        require(std::abs(outL - outR) < 1e-6f, "Sub drive remains 100% mono-locked");
+
+        shaper.setSoloLow(true);
+        float highEnergy = 0.0f;
+        for (int i = 0; i < 1024; ++i) {
+            const float in = 0.5f * std::sin(2.0f * 3.14159265f * 6000.0f * static_cast<float>(i) / 48000.0f);
+            shaper.processSample(in, in, outL, outR);
+            if (i >= 512) {
+                highEnergy += outL * outL;
+            }
+        }
+        require(highEnergy < 0.001f, "Solo Bass isolates the low band and rejects 6 kHz");
+
+        shaper.setSoloLow(false);
+        shaper.setUpperTiltDb(6.0f);
+        float boostedEnergy = 0.0f;
+        for (int i = 0; i < 1024; ++i) {
+            const float in = 0.3f * std::sin(2.0f * 3.14159265f * 8000.0f * static_cast<float>(i) / 48000.0f);
+            shaper.processSample(in, in, outL, outR);
+            if (i >= 512) {
+                boostedEnergy += outL * outL;
+            }
+        }
+        shaper.setUpperTiltDb(-6.0f);
+        float cutEnergy = 0.0f;
+        for (int i = 0; i < 1024; ++i) {
+            const float in = 0.3f * std::sin(2.0f * 3.14159265f * 8000.0f * static_cast<float>(i) / 48000.0f);
+            shaper.processSample(in, in, outL, outR);
+            if (i >= 512) {
+                cutEnergy += outL * outL;
+            }
+        }
+        require(boostedEnergy > cutEnergy * 4.0f, "Upper tilt boosts and attenuates high-band air");
+    }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";

@@ -22,25 +22,35 @@ private:
     juce::Slider widthSlider_;
     juce::Slider upperWidthSlider_;
     juce::Slider stereoizeSlider_;
+    juce::Slider subDriveSlider_;
     juce::Slider outputDbSlider_;
+    juce::Slider upperTiltSlider_;
+    juce::TextButton soloLowButton_{"SOLO BASS"};
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label upperWidthLabel_;
     juce::Label stereoizeLabel_;
+    juce::Label subDriveLabel_;
+    juce::Label upperTiltLabel_;
     juce::Label correlationLabel_;
     juce::Label correlationValueLabel_;
     juce::Label freqValueLabel_;
     juce::Label widthValueLabel_;
     juce::Label upperWidthValueLabel_;
     juce::Label stereoizeValueLabel_;
+    juce::Label subDriveValueLabel_;
     juce::Label outputDbLabel_;
     juce::Label outputDbValueLabel_;
+    juce::Label upperTiltValueLabel_;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> freqAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> widthAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> upperWidthAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> stereoizeAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> subDriveAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputDbAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> upperTiltAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> soloLowAttachment_;
 
     std::unique_ptr<juce::Drawable> stereoField_;
     juce::Image faceplate_;

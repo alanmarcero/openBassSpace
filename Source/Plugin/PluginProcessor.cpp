@@ -12,6 +12,9 @@ BassSpaceProcessor::BassSpaceProcessor()
     upperWidthParam_ = parameters.getRawParameterValue(bass_space::params::kUpperWidth);
     stereoizeParam_ = parameters.getRawParameterValue(bass_space::params::kStereoize);
     outputDbParam_ = parameters.getRawParameterValue(bass_space::params::kOutputDb);
+    subDriveParam_ = parameters.getRawParameterValue(bass_space::params::kSubDrive);
+    upperTiltParam_ = parameters.getRawParameterValue(bass_space::params::kUpperTilt);
+    soloLowParam_ = parameters.getRawParameterValue(bass_space::params::kSoloLow);
 }
 
 void BassSpaceProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
@@ -70,6 +73,9 @@ void BassSpaceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     shaper_.setWidth(widthRatio);
     shaper_.setUpperWidth(currentUpperWidth() * 0.01f);
     shaper_.setStereoizeAmount(currentStereoize() * 0.01f);
+    shaper_.setSubDrive(currentSubDrive() * 0.01f);
+    shaper_.setUpperTiltDb(currentUpperTilt());
+    shaper_.setSoloLow(currentSoloLow());
 
     float* left = buffer.getWritePointer(0);
     float* right = (numChannels > 1 && totalNumInputChannels > 1) ? buffer.getWritePointer(1) : nullptr;
@@ -114,7 +120,25 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         return;
     }
 
-    parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
+    auto tree = juce::ValueTree::fromXml(*xmlState);
+    if (!tree.isValid()) {
+        return;
+    }
+    const auto ensureDefault = [&tree](const char* paramId, float defaultValue) {
+        if (!tree.getChildWithProperty("id", paramId).isValid()) {
+            juce::ValueTree child("PARAM");
+            child.setProperty("id", paramId, nullptr);
+            child.setProperty("value", defaultValue, nullptr);
+            tree.appendChild(child, nullptr);
+        }
+    };
+    ensureDefault(bass_space::params::kUpperWidth, 100.0f);
+    ensureDefault(bass_space::params::kStereoize, 0.0f);
+    ensureDefault(bass_space::params::kSubDrive, 0.0f);
+    ensureDefault(bass_space::params::kUpperTilt, 0.0f);
+    ensureDefault(bass_space::params::kSoloLow, 0.0f);
+
+    parameters.replaceState(tree);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {

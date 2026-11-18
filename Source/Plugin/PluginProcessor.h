@@ -50,6 +50,18 @@ public:
         return stereoizeParam_ != nullptr ? stereoizeParam_->load(std::memory_order_relaxed) : 0.0f;
     }
 
+    [[nodiscard]] float currentSubDrive() const noexcept {
+        return subDriveParam_ != nullptr ? subDriveParam_->load(std::memory_order_relaxed) : 0.0f;
+    }
+
+    [[nodiscard]] float currentUpperTilt() const noexcept {
+        return upperTiltParam_ != nullptr ? upperTiltParam_->load(std::memory_order_relaxed) : 0.0f;
+    }
+
+    [[nodiscard]] bool currentSoloLow() const noexcept {
+        return soloLowParam_ != nullptr && soloLowParam_->load(std::memory_order_relaxed) > 0.5f;
+    }
+
     [[nodiscard]] float currentCorrelation() const noexcept {
         return correlation_.load(std::memory_order_relaxed);
     }
@@ -64,6 +76,9 @@ private:
     std::atomic<float>* upperWidthParam_ = nullptr;
     std::atomic<float>* stereoizeParam_ = nullptr;
     std::atomic<float>* outputDbParam_ = nullptr;
+    std::atomic<float>* subDriveParam_ = nullptr;
+    std::atomic<float>* upperTiltParam_ = nullptr;
+    std::atomic<float>* soloLowParam_ = nullptr;
     ArtworkBeatClock artworkClock_;
     double processingRate_ = 48000.0;
     std::atomic<float> correlation_ {0.0f};

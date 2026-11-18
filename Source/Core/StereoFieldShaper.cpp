@@ -33,8 +33,12 @@ void StereoFieldShaper::reset() noexcept {
     currentWidth_ = targetWidth_;
     currentUpperWidth_ = targetUpperWidth_;
     currentStereoize_ = targetStereoize_;
+    currentSubDrive_ = targetSubDrive_;
+    currentUpperTiltGain_ = std::pow(10.0f, targetUpperTiltDb_ / 20.0f);
     allpassInput_ = 0.0f;
     allpassOutput_ = 0.0f;
+    tiltLpL_ = 0.0f;
+    tiltLpR_ = 0.0f;
     currentBypassGain_ = bypassed_ ? 0.0f : 1.0f;
     currentSoloGain_ = soloLow_ ? 1.0f : 0.0f;
     hasProcessedAudio_ = false;
@@ -71,6 +75,20 @@ void StereoFieldShaper::setStereoizeAmount(float amount) noexcept {
     targetStereoize_ = std::clamp(amount, 0.0f, 1.0f);
     if (!hasProcessedAudio_) {
         currentStereoize_ = targetStereoize_;
+    }
+}
+
+void StereoFieldShaper::setSubDrive(float drive) noexcept {
+    targetSubDrive_ = std::clamp(drive, 0.0f, 1.0f);
+    if (!hasProcessedAudio_) {
+        currentSubDrive_ = targetSubDrive_;
+    }
+}
+
+void StereoFieldShaper::setUpperTiltDb(float tiltDb) noexcept {
+    targetUpperTiltDb_ = std::clamp(tiltDb, -6.0f, 6.0f);
+    if (!hasProcessedAudio_) {
+        currentUpperTiltGain_ = std::pow(10.0f, targetUpperTiltDb_ / 20.0f);
     }
 }
 
@@ -114,7 +132,12 @@ void StereoFieldShaper::processSample(float inL, float inR, float& outL, float& 
     const auto splitR = crossoverR_.process(inR);
 
     // Mid/Side matrix of low frequencies (< crossover)
-    const float midLow = 0.5f * (splitL.low + splitR.low);
+    float midLow = 0.5f * (splitL.low + splitR.low);
+    if (targetSubDrive_ > 1e-4f) {
+        const float driveGain = 1.0f + 2.5f * targetSubDrive_;
+        const float saturated = std::tanh(midLow * driveGain) / (1.0f + 1.15f * targetSubDrive_);
+        midLow += (saturated - midLow) * targetSubDrive_;
+    }
     const float sideLow = 0.5f * (splitL.low - splitR.low);
 
     const float shapedSideLow = sideLow * targetWidth_;
@@ -128,8 +151,15 @@ void StereoFieldShaper::processSample(float inL, float inR, float& outL, float& 
         return;
     }
 
-    const float midHigh = 0.5f * (splitL.high + splitR.high);
-    const float sideHigh = 0.5f * (splitL.high - splitR.high) * targetUpperWidth_;
+    const float tiltAlpha = static_cast<float>(1.0 - std::exp(-2.0 * 3.141592653589793 * 2400.0 / sampleRate_));
+    tiltLpL_ += tiltAlpha * (splitL.high - tiltLpL_);
+    tiltLpR_ += tiltAlpha * (splitR.high - tiltLpR_);
+    const float targetTiltGain = std::pow(10.0f, targetUpperTiltDb_ / 20.0f);
+    const float tiltedHighL = tiltLpL_ + (splitL.high - tiltLpL_) * targetTiltGain;
+    const float tiltedHighR = tiltLpR_ + (splitR.high - tiltLpR_) * targetTiltGain;
+
+    const float midHigh = 0.5f * (tiltedHighL + tiltedHighR);
+    const float sideHigh = 0.5f * (tiltedHighL - tiltedHighR) * targetUpperWidth_;
     constexpr float allpassCoefficient = 0.7f;
     const float decorrelatedHigh = allpassCoefficient * midHigh + allpassInput_ - allpassCoefficient * allpassOutput_;
     allpassInput_ = midHigh;
@@ -160,6 +190,10 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
     const float widthStep = (endWidth - startWidth) / static_cast<float>(numSamples);
     const float upperWidthStep = (targetUpperWidth_ - currentUpperWidth_) / static_cast<float>(numSamples);
     const float stereoizeStep = (targetStereoize_ - currentStereoize_) / static_cast<float>(numSamples);
+    const float subDriveStep = (targetSubDrive_ - currentSubDrive_) / static_cast<float>(numSamples);
+    const float targetTiltGain = std::pow(10.0f, targetUpperTiltDb_ / 20.0f);
+    const float tiltGainStep = (targetTiltGain - currentUpperTiltGain_) / static_cast<float>(numSamples);
+    const float tiltAlpha = static_cast<float>(1.0 - std::exp(-2.0 * 3.141592653589793 * 2400.0 / (sampleRate_ > 1000.0 ? sampleRate_ : 44100.0)));
 
     const float targetSoloGain = soloLow_ ? 1.0f : 0.0f;
     const float soloStep = (targetSoloGain - currentSoloGain_) / static_cast<float>(numSamples);
@@ -176,14 +210,26 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
             currentBypassGain_ += bypassStep;
             currentUpperWidth_ += upperWidthStep;
             currentStereoize_ += stereoizeStep;
+            currentSubDrive_ += subDriveStep;
+            currentUpperTiltGain_ += tiltGainStep;
             const float dry = leftChannel[i];
             const auto split = crossoverL_.process(dry);
-            const float wet = split.low + (1.0f - currentSoloGain_) * split.high;
+            float lowVal = split.low;
+            if (currentSubDrive_ > 1e-4f) {
+                const float driveGain = 1.0f + 2.5f * currentSubDrive_;
+                const float sat = std::tanh(lowVal * driveGain) / (1.0f + 1.15f * currentSubDrive_);
+                lowVal += (sat - lowVal) * currentSubDrive_;
+            }
+            tiltLpL_ += tiltAlpha * (split.high - tiltLpL_);
+            const float highVal = tiltLpL_ + (split.high - tiltLpL_) * currentUpperTiltGain_;
+            const float wet = lowVal + (1.0f - currentSoloGain_) * highVal;
             leftChannel[i] = dry + currentBypassGain_ * (wet - dry);
         }
         currentWidth_ = endWidth;
         currentUpperWidth_ = targetUpperWidth_;
         currentStereoize_ = targetStereoize_;
+        currentSubDrive_ = targetSubDrive_;
+        currentUpperTiltGain_ = targetTiltGain;
         currentSoloGain_ = targetSoloGain;
         currentBypassGain_ = targetBypassGain;
         return;
@@ -213,6 +259,8 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
             currentWidth_ += widthStep;
             currentUpperWidth_ += upperWidthStep;
             currentStereoize_ += stereoizeStep;
+            currentSubDrive_ += subDriveStep;
+            currentUpperTiltGain_ += tiltGainStep;
             currentSoloGain_ += soloStep;
             currentBypassGain_ += bypassStep;
 
@@ -222,7 +270,12 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
             const auto splitL = crossoverL_.process(dryL);
             const auto splitR = crossoverR_.process(dryR);
 
-            const float midLow = 0.5f * (splitL.low + splitR.low);
+            float midLow = 0.5f * (splitL.low + splitR.low);
+            if (currentSubDrive_ > 1e-4f) {
+                const float driveGain = 1.0f + 2.5f * currentSubDrive_;
+                const float sat = std::tanh(midLow * driveGain) / (1.0f + 1.15f * currentSubDrive_);
+                midLow += (sat - midLow) * currentSubDrive_;
+            }
             const float sideLow = 0.5f * (splitL.low - splitR.low);
 
             const float shapedSideLow = sideLow * currentWidth_;
@@ -230,8 +283,13 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
             const float shapedLowL = midLow + shapedSideLow;
             const float shapedLowR = midLow - shapedSideLow;
 
-            const float midHigh = 0.5f * (splitL.high + splitR.high);
-            const float sideHigh = 0.5f * (splitL.high - splitR.high) * currentUpperWidth_;
+            tiltLpL_ += tiltAlpha * (splitL.high - tiltLpL_);
+            tiltLpR_ += tiltAlpha * (splitR.high - tiltLpR_);
+            const float tiltedHighL = tiltLpL_ + (splitL.high - tiltLpL_) * currentUpperTiltGain_;
+            const float tiltedHighR = tiltLpR_ + (splitR.high - tiltLpR_) * currentUpperTiltGain_;
+
+            const float midHigh = 0.5f * (tiltedHighL + tiltedHighR);
+            const float sideHigh = 0.5f * (tiltedHighL - tiltedHighR) * currentUpperWidth_;
             constexpr float allpassCoefficient = 0.7f;
             const float decorrelatedHigh = allpassCoefficient * midHigh + allpassInput_ - allpassCoefficient * allpassOutput_;
             allpassInput_ = midHigh;
@@ -252,6 +310,8 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
     currentWidth_ = endWidth;
     currentUpperWidth_ = targetUpperWidth_;
     currentStereoize_ = targetStereoize_;
+    currentSubDrive_ = targetSubDrive_;
+    currentUpperTiltGain_ = targetTiltGain;
     currentSoloGain_ = targetSoloGain;
     currentBypassGain_ = targetBypassGain;
 }

@@ -15,6 +15,8 @@ public:
     void setWidth(float width) noexcept; // 0.0f = Mono, 1.0f = Normal, 2.0f = Enhanced
     void setUpperWidth(float width) noexcept;
     void setStereoizeAmount(float amount) noexcept;
+    void setSubDrive(float drive) noexcept;
+    void setUpperTiltDb(float tiltDb) noexcept;
     void setBypassed(bool bypassed) noexcept;
     void setSoloLow(bool solo) noexcept;
 
@@ -22,6 +24,8 @@ public:
     [[nodiscard]] float width() const noexcept { return targetWidth_; }
     [[nodiscard]] float upperWidth() const noexcept { return targetUpperWidth_; }
     [[nodiscard]] float stereoizeAmount() const noexcept { return targetStereoize_; }
+    [[nodiscard]] float subDrive() const noexcept { return targetSubDrive_; }
+    [[nodiscard]] float upperTiltDb() const noexcept { return targetUpperTiltDb_; }
     [[nodiscard]] bool isBypassed() const noexcept { return bypassed_; }
     [[nodiscard]] bool isSoloLow() const noexcept { return soloLow_; }
 
@@ -40,8 +44,14 @@ private:
     float currentUpperWidth_ = 1.0f;
     float targetStereoize_ = 0.0f;
     float currentStereoize_ = 0.0f;
+    float targetSubDrive_ = 0.0f;
+    float currentSubDrive_ = 0.0f;
+    float targetUpperTiltDb_ = 0.0f;
+    float currentUpperTiltGain_ = 1.0f;
     float allpassInput_ = 0.0f;
     float allpassOutput_ = 0.0f;
+    float tiltLpL_ = 0.0f;
+    float tiltLpR_ = 0.0f;
     bool bypassed_ = false;
     float currentBypassGain_ = 1.0f; // 1.0 = active, 0.0 = bypassed
     bool soloLow_ = false;
