@@ -283,18 +283,26 @@ void StereoFieldShaper::processBlock(float* leftChannel, float* rightChannel, in
             const float shapedLowL = midLow + shapedSideLow;
             const float shapedLowR = midLow - shapedSideLow;
 
-            tiltLpL_ += tiltAlpha * (splitL.high - tiltLpL_);
-            tiltLpR_ += tiltAlpha * (splitR.high - tiltLpR_);
-            const float tiltedHighL = tiltLpL_ + (splitL.high - tiltLpL_) * currentUpperTiltGain_;
-            const float tiltedHighR = tiltLpR_ + (splitR.high - tiltLpR_) * currentUpperTiltGain_;
+            const bool activeTilt = std::abs(currentUpperTiltGain_ - 1.0f) > 1e-5f || std::abs(tiltGainStep) > 1e-7f;
+            float tiltedHighL = splitL.high;
+            float tiltedHighR = splitR.high;
+            if (activeTilt) {
+                tiltLpL_ += tiltAlpha * (splitL.high - tiltLpL_);
+                tiltLpR_ += tiltAlpha * (splitR.high - tiltLpR_);
+                tiltedHighL = tiltLpL_ + (splitL.high - tiltLpL_) * currentUpperTiltGain_;
+                tiltedHighR = tiltLpR_ + (splitR.high - tiltLpR_) * currentUpperTiltGain_;
+            }
 
             const float midHigh = 0.5f * (tiltedHighL + tiltedHighR);
             const float sideHigh = 0.5f * (tiltedHighL - tiltedHighR) * currentUpperWidth_;
-            constexpr float allpassCoefficient = 0.7f;
-            const float decorrelatedHigh = allpassCoefficient * midHigh + allpassInput_ - allpassCoefficient * allpassOutput_;
-            allpassInput_ = midHigh;
-            allpassOutput_ = decorrelatedHigh;
-            const float stereoizedSide = (decorrelatedHigh - midHigh) * currentStereoize_;
+            float stereoizedSide = 0.0f;
+            if (currentStereoize_ > 1e-5f || std::abs(stereoizeStep) > 1e-7f) {
+                constexpr float allpassCoefficient = 0.7f;
+                const float decorrelatedHigh = allpassCoefficient * midHigh + allpassInput_ - allpassCoefficient * allpassOutput_;
+                allpassInput_ = midHigh;
+                allpassOutput_ = decorrelatedHigh;
+                stereoizedSide = (decorrelatedHigh - midHigh) * currentStereoize_;
+            }
 
             const float highMix = 1.0f - currentSoloGain_;
             const float wetL = shapedLowL + highMix * (midHigh + sideHigh + stereoizedSide);

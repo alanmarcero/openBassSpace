@@ -251,7 +251,7 @@ BassSpaceEditor::~BassSpaceEditor() {
 
 void BassSpaceEditor::timerCallback() {
     updateValueLabels();
-    repaint();
+    repaint(260, 80, 240, 208);
 }
 
 void BassSpaceEditor::updateValueLabels() {
