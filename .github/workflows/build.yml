@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   macos:
+    if: false
     runs-on: macos-15
     env:
       BUNDLE: build/openBassSpace_artefacts/Release/VST3/openBassSpace.vst3
@@ -93,7 +94,7 @@ jobs:
             openMaster-VST3-Windows.zip
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.windows.result == 'success' && (needs.macos.result == 'skipped' || needs.macos.result == 'success') }}
     needs: [macos, windows]
     runs-on: ubuntu-latest
     permissions:
