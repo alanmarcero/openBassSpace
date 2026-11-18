@@ -9,6 +9,9 @@ inline constexpr const char* kWidth = "width";
 inline constexpr const char* kUpperWidth = "upper_width";
 inline constexpr const char* kStereoize = "stereoize";
 inline constexpr const char* kOutputDb = "output_db";
+inline constexpr const char* kSubDrive = "sub_drive";
+inline constexpr const char* kUpperTilt = "upper_tilt";
+inline constexpr const char* kSoloLow = "solo_low";
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

@@ -50,6 +50,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         juce::AudioParameterFloatAttributes().withLabel("dB")
     ));
 
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ kSubDrive, 2 },
+        "Sub Drive",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("%")
+    ));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ kUpperTilt, 2 },
+        "Upper Tilt",
+        juce::NormalisableRange<float>(-6.0f, 6.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")
+    ));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{ kSoloLow, 2 },
+        "Solo Bass",
+        false
+    ));
+
     return { parameters.begin(), parameters.end() };
 }
 
