@@ -53,8 +53,41 @@ static bool hasSliderTitle(juce::Component& component, const juce::String& title
     });
 }
 
+// Factory-default editor at the default window size. The host-check path below
+// moves parameters before it saves, so the published preview uses this mode.
+static int captureFactoryPreview(const juce::String& outPath) {
+    BassSpaceProcessor processor;
+    processor.setRateAndBufferSizeDetails(48000, 256);
+    processor.prepareToPlay(48000, 256);
+    require(processor.getCurrentProgram() == 0, "factory default program");
+    require(std::abs(processor.currentFrequency() - 120.0f) < 0.001f, "factory crossover");
+    require(std::abs(processor.currentWidth()) < 0.001f, "factory bass width");
+    require(std::abs(processor.currentUpperWidth() - 100.0f) < 0.001f, "factory upper width");
+    require(std::abs(processor.currentStereoize()) < 0.001f, "factory stereoize");
+    require(std::abs(processor.parameters.getRawParameterValue("output_db")->load()) < 0.001f,
+            "factory output");
+    require(std::abs(processor.currentSubDrive()) < 0.001f, "factory sub drive");
+    require(std::abs(processor.currentUpperTilt()) < 0.001f, "factory upper tilt");
+    require(!processor.currentSoloLow(), "factory solo bass off");
+    require(!processor.currentBypass(), "factory bypass off");
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    require(editor != nullptr, "Editor creation failed");
+    require(editor->getWidth() == BassSpaceProcessor::defaultEditorWidth
+                && editor->getHeight() == BassSpaceProcessor::defaultEditorHeight,
+            "editor size match");
+    pump();
+    save(*editor, outPath);
+    std::cout << "factory preview saved to " << outPath << " ("
+              << editor->getWidth() << "x" << editor->getHeight() << ")\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
+    if (argc > 1 && juce::String(argv[1]) == "--preview") {
+        const juce::String outPath = argc > 2 ? juce::String(argv[2]) : "docs/screenshots/preview.png";
+        return captureFactoryPreview(outPath);
+    }
     BassSpaceProcessor p;
     p.setRateAndBufferSizeDetails(48000, 256);
     p.prepareToPlay(48000, 256);
