@@ -6,6 +6,10 @@ Set bass and upper-band stereo width independently. Keep bass centered or widen 
 
 [Latest release](https://github.com/alanmarcero/openBassSpace/releases/latest) · [Install with OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest)
 
+## Beta
+
+All of these plugins are in beta. The macOS and Linux builds are not up to date, so the Windows build is the one to use for now. A plugin can change dramatically from one release to the next, but the goal is for each one to keep getting better.
+
 ## Controls
 
 - **Crossover:** 20–500 Hz. Splits Width from the upper band.
