@@ -12,6 +12,7 @@ inline constexpr const char* kOutputDb = "output_db";
 inline constexpr const char* kSubDrive = "sub_drive";
 inline constexpr const char* kUpperTilt = "upper_tilt";
 inline constexpr const char* kSoloLow = "solo_low";
+inline constexpr const char* kBypass = "bypass";
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

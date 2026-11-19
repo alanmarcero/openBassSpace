@@ -72,6 +72,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         false
     ));
 
+    // Host bypass. Appended so existing parameter indices stay stable.
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{ kBypass, 1 },
+        "Bypass",
+        false
+    ));
+
     return { parameters.begin(), parameters.end() };
 }
 

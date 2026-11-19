@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "SuiteStrip.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 class BassSpaceEditor final : public juce::AudioProcessorEditor, private juce::Timer {
@@ -10,10 +11,12 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress& key) override;
 
 private:
     void timerCallback() override;
     void updateValueLabels();
+    void positionPresetBrowser();
 
     BassSpaceProcessor& processor_;
     juce::LookAndFeel_V4 theme_;
@@ -43,6 +46,10 @@ private:
     juce::Label outputDbValueLabel_;
     juce::Label upperTiltValueLabel_;
 
+    alanmarcero::suite::SuiteStrip suiteStrip_;
+    alanmarcero::suite::PresetBrowser presetBrowser_;
+    juce::Component stereoFieldAnchor_;
+
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> freqAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> widthAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> upperWidthAttachment_;
@@ -54,6 +61,14 @@ private:
 
     std::unique_ptr<juce::Drawable> stereoField_;
     juce::Image faceplate_;
+
+    juce::Rectangle<int> headerArea_;
+    juce::Rectangle<int> badgeArea_;
+    juce::Rectangle<int> footerArea_;
+    juce::Rectangle<int> fieldArea_;
+    juce::Rectangle<int> ringArea_;
+    juce::Rectangle<int> masterArea_;
+    juce::Rectangle<float> correlationTrack_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceEditor)
 };
