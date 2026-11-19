@@ -131,10 +131,11 @@ jobs:
           generate_release_notes: true
 
   update-preview:
-    # Refreshes docs/screenshots/preview.png (the image OpenVST Manager shows) from the
-    # real editor capture whenever UI-affecting files change on main.
+    # Refreshes docs/screenshots/preview.png (the image OpenVST Manager shows) from a
+    # factory-default editor capture whenever UI-affecting files change on main.
+    # This job used to need the Windows build, so a Windows link failure skipped the
+    # screenshot entirely. It now renders on Linux and does not wait on Windows.
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -142,18 +143,48 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: preview-screenshot
-          path: preview
-      - name: Commit refreshed preview if changed
+      - name: Detect UI changes
+        id: ui
         run: |
-          git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -qE '^(Source|assets|Tools|tools|Tests)/' || { echo "No UI changes; keeping preview."; exit 0; }
+          before="${{ github.event.before }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$before" "${{ github.sha }}" | grep -qE '^(Source|assets|Tools|tools|Tests)/'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No UI changes; keeping preview."
+          fi
+      - name: Install GUI libraries
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libasound2-dev libfontconfig1-dev libfreetype6-dev libgtk-3-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            xvfb
+      - name: Build editor capture
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DOBS_BUILD_TESTS=OFF
+          cmake --build build --target open_bass_space_capture --parallel
+      - name: Render factory-default preview
+        if: steps.ui.outputs.changed == 'true'
+        run: |
           mkdir -p docs/screenshots
-          cp "preview/native-ui.png" docs/screenshots/preview.png
+          xvfb-run -a ./build/open_bass_space_capture --preview docs/screenshots/preview.png
+      - name: Commit refreshed preview if changed
+        if: steps.ui.outputs.changed == 'true'
+        run: |
           if git diff --quiet -- docs/screenshots/preview.png; then echo "Preview unchanged."; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/screenshots/preview.png
           git commit -m "docs: refresh preview screenshot [skip ci]"
-          git push
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
