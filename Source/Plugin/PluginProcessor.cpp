@@ -406,3 +406,8 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         editor->setSize(editorWidth_, editorHeight_);
     }
 }
+
+// The VST3, AU, and standalone wrappers call this. It has to live in a file the plugin target compiles.
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
+    return new BassSpaceProcessor();
+}
