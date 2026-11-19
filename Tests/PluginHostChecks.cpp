@@ -34,6 +34,18 @@ static bool hasVisibleLabel(juce::Component& component, const juce::String& text
     });
 }
 
+static juce::Component* findById(juce::Component& component, const juce::String& id) {
+    if (component.getComponentID() == id) {
+        return &component;
+    }
+    for (auto* child : component.getChildren()) {
+        if (auto* found = findById(*child, id)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 static bool hasSliderTitle(juce::Component& component, const juce::String& title) {
     return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&title](auto* child) {
         auto* slider = dynamic_cast<juce::Slider*>(child);
@@ -83,6 +95,7 @@ int main(int argc, char** argv) {
     legacyState.removeChild(legacyState.getChildWithProperty("id", "sub_drive"), nullptr);
     legacyState.removeChild(legacyState.getChildWithProperty("id", "upper_tilt"), nullptr);
     legacyState.removeChild(legacyState.getChildWithProperty("id", "solo_low"), nullptr);
+    legacyState.removeChild(legacyState.getChildWithProperty("id", "bypass"), nullptr);
     juce::MemoryBlock legacyStateData;
     juce::AudioProcessor::copyXmlToBinary(*legacyState.createXml(), legacyStateData);
     BassSpaceProcessor legacyRestored;
@@ -97,6 +110,9 @@ int main(int argc, char** argv) {
             "Legacy sessions default Upper Tilt flat");
     require(std::abs(legacyRestored.parameters.getRawParameterValue("solo_low")->load()) < 0.01f,
             "Legacy sessions default Solo Bass off");
+    require(legacyRestored.getBypassParameter() != nullptr, "host bypass parameter is exposed");
+    require(std::abs(legacyRestored.parameters.getRawParameterValue("bypass")->load()) < 0.01f,
+            "Legacy sessions default Bypass off");
 
     const auto renderRms = [](float outputDbValue) {
         BassSpaceProcessor processor;
@@ -156,7 +172,26 @@ int main(int argc, char** argv) {
     pump();
 
     require(editor != nullptr, "Editor creation failed");
-    require(editor->getWidth() == 760 && editor->getHeight() == 480, "editor size match");
+    require(editor->getWidth() == BassSpaceProcessor::defaultEditorWidth
+                && editor->getHeight() == BassSpaceProcessor::defaultEditorHeight,
+            "editor size match");
+    require(editor->isResizable(), "editor is resizable");
+    require(editor->getConstrainer() != nullptr && editor->getConstrainer()->getFixedAspectRatio() == 0.0,
+            "editor has no fixed aspect ratio");
+    auto* correlationReadout = dynamic_cast<juce::Label*>(findById(*editor, "correlationValue"));
+    require(correlationReadout != nullptr && correlationReadout->getFont().getHeight() >= 24.0f
+                && correlationReadout->getHeight() >= 32,
+            "correlation readout stays large");
+    require(findById(*editor, "undoButton") != nullptr, "undo button is visible");
+    require(findById(*editor, "redoButton") != nullptr, "redo button is visible");
+    require(findById(*editor, "compareA") != nullptr && findById(*editor, "compareB") != nullptr,
+            "A/B buttons are visible");
+    require(findById(*editor, "copyAtoB") != nullptr && findById(*editor, "copyBtoA") != nullptr,
+            "A/B copy buttons are visible");
+    require(findById(*editor, "bypassButton") != nullptr, "bypass button is visible");
+    auto* presetButton = dynamic_cast<juce::Button*>(findById(*editor, "presetButton"));
+    require(presetButton != nullptr && presetButton->getButtonText() == "Mono under 120 Hz",
+            "factory preset name is visible");
     require(hasVisibleLabel(*editor, "Crossover"), "Crossover section label is visible");
     require(hasVisibleLabel(*editor, "Bass width"), "Bass width section label is visible");
     require(hasVisibleLabel(*editor, "Upper width"), "Upper-band width section label is visible");
@@ -189,11 +224,13 @@ int main(int argc, char** argv) {
     host.position.setPpqPosition(-1.75);
     p.processBlock(clockAudio, clockMidi);
     require(std::abs(p.artworkPhase() - 0.25f) < 0.0001f, "SVG follows a negative host position");
-    const auto onbeat = editor->createComponentSnapshot(juce::Rectangle<int>(292, 140, 175, 77));
+    auto* stereoField = findById(*editor, "stereoField");
+    require(stereoField != nullptr && !stereoField->getBounds().isEmpty(), "stereo field anchor is laid out");
+    const auto onbeat = editor->createComponentSnapshot(stereoField->getBounds());
     host.position.setPpqPosition(22.875);
     p.processBlock(clockAudio, clockMidi);
     require(std::abs(p.artworkPhase() - 0.875f) < 0.0001f, "SVG follows a host seek");
-    const auto offbeat = editor->createComponentSnapshot(juce::Rectangle<int>(292, 140, 175, 77));
+    const auto offbeat = editor->createComponentSnapshot(stereoField->getBounds());
     int changed = 0;
     for (int y = 0; y < onbeat.getHeight(); ++y)
         for (int x = 0; x < onbeat.getWidth(); ++x)
@@ -363,6 +400,219 @@ int main(int argc, char** argv) {
             }
         }
         require(boostedEnergy > cutEnergy * 4.0f, "Upper tilt boosts and attenuates high-band air");
+    }
+
+    editor->setSize(320, 180);
+    require(editor->getWidth() >= BassSpaceProcessor::minEditorWidth
+                && editor->getHeight() >= BassSpaceProcessor::minEditorHeight,
+            "editor enforces a readable minimum size");
+    editor->setSize(980, 700);
+    require(editor->getWidth() == 980 && editor->getHeight() == 700, "editor accepts a free resize");
+    auto* resizedReadout = dynamic_cast<juce::Label*>(findById(*editor, "correlationValue"));
+    require(resizedReadout != nullptr && resizedReadout->getFont().getHeight() >= 24.0f,
+            "correlation readout stays large when resized");
+
+    {
+        BassSpaceProcessor suite;
+        suite.setRateAndBufferSizeDetails(48000, 512);
+        suite.prepareToPlay(48000, 512);
+        require(suite.getBypassParameter() != nullptr, "getBypassParameter is wired");
+        require(suite.getBypassParameter() == suite.parameters.getParameter("bypass"),
+                "bypass parameter is the host bypass");
+        require(suite.getNumPrograms() == 9, "factory program count");
+        const char* names[] = { "Mono under 120 Hz", "Mono under 80 Hz", "Mono under 200 Hz", "Flat",
+                                "Wide upper only", "Stereoize", "Solo bass", "Sub punch", "Air tilt" };
+        for (int i = 0; i < suite.getNumPrograms(); ++i) {
+            require(suite.getProgramName(i) == names[i], "factory program name");
+        }
+        require(suite.getCurrentProgram() == 0, "default program is mono under 120 Hz");
+
+        suite.setCurrentProgram(1);
+        require(suite.getCurrentProgram() == 1, "current program follows the host");
+        require(std::abs(suite.currentFrequency() - 80.0f) < 0.25f, "mono under 80 Hz sets the crossover");
+        require(std::abs(suite.currentWidth()) < 0.25f, "mono under 80 Hz centers the bass");
+        suite.setCurrentProgram(3);
+        require(std::abs(suite.currentWidth() - 100.0f) < 0.25f, "Flat leaves bass width unchanged");
+        suite.setCurrentProgram(4);
+        require(std::abs(suite.currentUpperWidth() - 180.0f) < 0.25f, "Wide upper only widens the top band");
+        require(std::abs(suite.currentWidth()) < 0.25f, "Wide upper only keeps the bass mono");
+        suite.setCurrentProgram(6);
+        require(suite.currentSoloLow(), "Solo bass program enables solo");
+        require(suite.canUndo(), "loading a program is undoable");
+        suite.undo();
+        require(std::abs(suite.currentUpperWidth() - 180.0f) < 0.25f, "undo restores the previous program");
+        require(!suite.currentSoloLow(), "undo clears Solo bass");
+        suite.redo();
+        require(suite.currentSoloLow(), "redo returns to Solo bass");
+
+        auto* width = suite.parameters.getParameter("width");
+        require(width != nullptr, "width parameter exists");
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(40.0f));
+        width->setValueNotifyingHost(width->convertTo0to1(80.0f));
+        width->endChangeGesture();
+        require(std::abs(suite.currentWidth() - 80.0f) < 0.25f, "gesture applies the final width");
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(20.0f));
+        width->endChangeGesture();
+        suite.undo();
+        require(std::abs(suite.currentWidth() - 80.0f) < 0.25f, "one undo reverts one gesture, not the samples inside it");
+        suite.undo();
+        require(std::abs(suite.currentWidth()) < 0.25f, "second undo restores the program width");
+
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(55.0f));
+        width->endChangeGesture();
+        std::unique_ptr<juce::AudioProcessorEditor> suiteEditor(suite.createEditor());
+        pump();
+        auto* undoButton = dynamic_cast<juce::Button*>(findById(*suiteEditor, "undoButton"));
+        require(undoButton != nullptr && undoButton->isEnabled(), "undo button enables after an edit");
+        undoButton->triggerClick();
+        pump();
+        require(std::abs(suite.currentWidth()) < 0.25f, "undo button restores the parameter");
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(55.0f));
+        width->endChangeGesture();
+        require(suiteEditor->keyPressed(juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0)),
+                "Ctrl or Cmd+Z is handled");
+        require(std::abs(suite.currentWidth()) < 0.25f, "keyboard undo restores the parameter");
+        require(suiteEditor->keyPressed(juce::KeyPress('z', juce::ModifierKeys::commandModifier
+                                                            | juce::ModifierKeys::shiftModifier, 0)),
+                "Shift+Ctrl or Cmd+Z is handled");
+        require(std::abs(suite.currentWidth() - 55.0f) < 0.25f, "keyboard redo restores the parameter");
+
+        suite.selectCompareSlot(1);
+        require(suite.activeCompareSlot() == 1, "A/B toggle moves to B");
+        require(std::abs(suite.currentWidth()) < 0.25f, "slot B still holds the earlier state");
+        width->setValueNotifyingHost(width->convertTo0to1(15.0f));
+        suite.selectCompareSlot(0);
+        require(suite.activeCompareSlot() == 0, "A/B toggle returns to A");
+        require(std::abs(suite.currentWidth() - 55.0f) < 0.25f, "slot A kept its width");
+        suite.selectCompareSlot(1);
+        require(std::abs(suite.currentWidth() - 15.0f) < 0.25f, "slot B kept its width");
+        suite.copyCompareSlot(0, 1);
+        require(std::abs(suite.currentWidth() - 55.0f) < 0.25f, "copy A to B updates the active B slot");
+        suite.selectCompareSlot(0);
+        require(std::abs(suite.currentWidth() - 55.0f) < 0.25f, "copy leaves A unchanged");
+        suite.undo();
+        suite.undo();
+        require(suite.activeCompareSlot() == 1, "undo restores the compare slot");
+        require(std::abs(suite.currentWidth() - 15.0f) < 0.25f, "undo restores the slot that copy replaced");
+
+        suiteEditor->setSize(1020, 680);
+        juce::MemoryBlock suiteState;
+        suite.getStateInformation(suiteState);
+        BassSpaceProcessor reopened;
+        reopened.setStateInformation(suiteState.getData(), static_cast<int>(suiteState.getSize()));
+        std::unique_ptr<juce::AudioProcessorEditor> reopenedEditor(reopened.createEditor());
+        require(reopenedEditor->getWidth() == 1020 && reopenedEditor->getHeight() == 680,
+                "editor size is saved with the session");
+        require(reopened.activeCompareSlot() == suite.activeCompareSlot(), "compare slot is saved with the session");
+        require(std::abs(reopened.currentWidth() - suite.currentWidth()) < 0.25f,
+                "active parameters are saved with the compare slots");
+        const int other = reopened.activeCompareSlot() == 0 ? 1 : 0;
+        reopened.selectCompareSlot(other);
+        require(std::abs(reopened.currentWidth() - 55.0f) < 0.25f, "the other compare slot is saved");
+
+        auto presetDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("openBassSpace-preset-tests");
+        presetDir.deleteRecursively();
+        suite.setUserPresetDirectory(presetDir);
+        auto& library = suite.presetLibrary();
+        require(library.directory() == presetDir, "user presets use the requested directory");
+        require(!library.saveUser("Flat", suite.currentParameterValues()), "factory names cannot be overwritten");
+        require(!library.deleteUser("Wide upper only"), "factory presets cannot be deleted");
+        require(library.isFactoryName("Solo bass"), "factory names stay recognised");
+        require(library.saveUser("My mono", suite.currentParameterValues()), "user preset saves");
+        require(library.filtered("my").size() == 1, "search finds the user preset");
+        require(library.filtered("upper").size() == 1, "search finds a factory preset");
+        require(library.setFavorite("Flat", true, true), "factory preset can be a favorite");
+        require(library.setFavorite("My mono", false, true), "user preset can be a favorite");
+        require(library.renameUser("My mono", "My wide"), "user preset renames");
+        require(library.filtered("My mono").empty(), "renamed preset leaves its old name");
+        library.rescan();
+        bool factoryFavorite = false;
+        bool userFavorite = false;
+        for (const auto& entry : library.factory()) {
+            if (entry.name == "Flat") {
+                factoryFavorite = entry.favorite;
+            }
+        }
+        for (const auto& entry : library.user()) {
+            if (entry.name == "My wide") {
+                userFavorite = entry.favorite;
+            }
+        }
+        require(factoryFavorite && userFavorite, "favorites survive a rescan");
+        alanmarcero::suite::PresetEntry custom;
+        custom.name = "My wide";
+        custom.factory = false;
+        custom.values = suite.currentParameterValues();
+        for (auto& value : custom.values) {
+            if (value.first == "width") {
+                value.second = 125.0f;
+            }
+        }
+        suite.loadPreset(custom);
+        require(std::abs(suite.currentWidth() - 125.0f) < 0.25f, "loading a user preset applies its values");
+        require(suite.currentPresetName() == "My wide", "loading a user preset updates the name");
+        require(library.deleteUser("My wide"), "user preset deletes");
+        require(library.user().empty(), "deleted user preset is gone");
+        require(library.factory().size() == 9, "factory bank remains after user preset edits");
+
+        auto* bypass = suite.getBypassParameter();
+        auto* output = suite.parameters.getParameter("output_db");
+        auto* frequency = suite.parameters.getParameter("frequency");
+        require(output != nullptr && frequency != nullptr, "bypass render parameters exist");
+        frequency->setValueNotifyingHost(frequency->convertTo0to1(150.0f));
+        width->setValueNotifyingHost(width->convertTo0to1(0.0f));
+        output->setValueNotifyingHost(output->convertTo0to1(12.0f));
+        auto* solo = suite.parameters.getParameter("solo_low");
+        require(solo != nullptr, "solo parameter exists");
+        solo->setValueNotifyingHost(0.0f);
+        juce::AudioBuffer<float> bypassAudio(2, 512);
+        juce::MidiBuffer bypassMidi;
+        const auto fillBypass = [&bypassAudio](int block) {
+            for (int sample = 0; sample < bypassAudio.getNumSamples(); ++sample) {
+                const float value = 0.5f * std::sin(2.0f * 3.14159265f * 60.0f
+                    * static_cast<float>(block * bypassAudio.getNumSamples() + sample) / 48000.0f);
+                bypassAudio.setSample(0, sample, value);
+                bypassAudio.setSample(1, sample, -value);
+            }
+        };
+        for (int block = 0; block < 10; ++block) {
+            fillBypass(block);
+            suite.processBlock(bypassAudio, bypassMidi);
+        }
+        const float beforeBypass = bypassAudio.getSample(0, bypassAudio.getNumSamples() - 1);
+        bypass->setValueNotifyingHost(1.0f);
+        fillBypass(10);
+        suite.processBlock(bypassAudio, bypassMidi);
+        require(std::abs(bypassAudio.getSample(0, 0) - beforeBypass) < 0.05f,
+                "engaging bypass does not jump");
+        float maxStep = 0.0f;
+        for (int sample = 1; sample < bypassAudio.getNumSamples(); ++sample) {
+            maxStep = std::max(maxStep, std::abs(bypassAudio.getSample(0, sample) - bypassAudio.getSample(0, sample - 1)));
+        }
+        require(maxStep < 0.05f, "bypass crossfade has no click");
+        for (int block = 11; block < 40; ++block) {
+            fillBypass(block);
+            suite.processBlock(bypassAudio, bypassMidi);
+        }
+        float settledError = 0.0f;
+        for (int sample = 0; sample < bypassAudio.getNumSamples(); ++sample) {
+            const float value = 0.5f * std::sin(2.0f * 3.14159265f * 60.0f
+                * static_cast<float>(39 * bypassAudio.getNumSamples() + sample) / 48000.0f);
+            settledError = std::max(settledError, std::abs(bypassAudio.getSample(0, sample) - value));
+            settledError = std::max(settledError, std::abs(bypassAudio.getSample(1, sample) + value));
+        }
+        require(settledError < 0.02f, "settled bypass matches the dry input, including output trim");
+        const float beforeReturn = bypassAudio.getSample(0, bypassAudio.getNumSamples() - 1);
+        bypass->setValueNotifyingHost(0.0f);
+        fillBypass(40);
+        suite.processBlock(bypassAudio, bypassMidi);
+        require(std::abs(bypassAudio.getSample(0, 0) - beforeReturn) < 0.05f,
+                "leaving bypass does not jump");
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString

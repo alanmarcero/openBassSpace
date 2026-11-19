@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(openBassSpace VERSION 2.5.1 LANGUAGES C CXX)
+project(openBassSpace VERSION 2.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,17 +48,21 @@ if(OBS_BUILD_PLUGIN)
         NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
-        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE)
 
     target_sources(openBassSpace PRIVATE
         Source/Plugin/Parameters.cpp
         Source/Plugin/PluginProcessor.cpp
-        Source/Plugin/PluginEditor.cpp)
+        Source/Plugin/PluginEditor.cpp
+        Source/suite/SuiteHistory.cpp
+        Source/suite/PresetLibrary.cpp
+        Source/suite/SuiteStrip.cpp)
 
     target_include_directories(openBassSpace PRIVATE
         Source/Core
-        Source/Plugin)
+        Source/Plugin
+        Source/suite)
 
     target_compile_definitions(openBassSpace PUBLIC
         JUCE_WEB_BROWSER=0
@@ -78,7 +82,7 @@ if(OBS_BUILD_PLUGIN)
             juce::juce_recommended_warning_flags)
 
     add_executable(open_bass_space_capture Tests/PluginHostChecks.cpp)
-    target_include_directories(open_bass_space_capture PRIVATE Source/Plugin Source/Core)
+    target_include_directories(open_bass_space_capture PRIVATE Source/Plugin Source/Core Source/suite)
     target_link_libraries(open_bass_space_capture PRIVATE openBassSpace juce::juce_audio_utils)
     target_compile_definitions(open_bass_space_capture PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
     if(OBS_BUILD_TESTS)

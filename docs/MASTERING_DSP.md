@@ -1,5 +1,10 @@
 # Mastering DSP research and integration
 
+> **Not part of the openBassSpace build.** This note describes a mastering-chain
+> experiment (loudness, dynamics, tone, and limiting). `CMakeLists.txt` does not
+> compile or link those sources. The plugin that ships is the stereo-field shaper
+> only. This file is kept as research reference, not as product documentation.
+
 The new processing was researched before implementation. The companion
 [stage notes](MASTERING_STAGES.md) describe the compressor, equalizers, nonlinear
 stages, limiter and their measurements. Source code remains pure C++20 in the core;
