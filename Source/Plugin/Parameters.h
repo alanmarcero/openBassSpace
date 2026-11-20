@@ -13,6 +13,8 @@ inline constexpr const char* kSubDrive = "sub_drive";
 inline constexpr const char* kUpperTilt = "upper_tilt";
 inline constexpr const char* kSoloLow = "solo_low";
 inline constexpr const char* kBypass = "bypass";
+inline constexpr const char* kSlope = "slope";
+inline constexpr const char* kElliptical = "elliptical";
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

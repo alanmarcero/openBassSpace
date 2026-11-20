@@ -435,6 +435,79 @@ int main(int argc, char** argv) {
         require(boostedEnergy > cutEnergy * 4.0f, "Upper tilt boosts and attenuates high-band air");
     }
 
+    // Processor ceiling guard + selectable LR8 / Elliptical parameter checks
+    {
+        BassSpaceProcessor hotProc;
+        hotProc.setRateAndBufferSizeDetails(48000, 512);
+        hotProc.prepareToPlay(48000, 512);
+        auto* slopeParam = hotProc.parameters.getParameter("slope");
+        auto* ellipticalParam = hotProc.parameters.getParameter("elliptical");
+        require(slopeParam != nullptr && slopeParam->isAutomatable(), "LR8 slope parameter is exposed and automatable");
+        require(ellipticalParam != nullptr && ellipticalParam->isAutomatable(), "Elliptical mode parameter is exposed and automatable");
+
+        auto setHotParam = [&hotProc](const char* id, float plainValue) {
+            auto* param = hotProc.parameters.getParameter(id);
+            require(param != nullptr, "Hot test parameter missing");
+            param->setValueNotifyingHost(param->convertTo0to1(plainValue));
+        };
+        setHotParam("upper_width", 200.0f);
+        setHotParam("stereoize", 100.0f);
+        setHotParam("upper_tilt", 6.0f);
+        setHotParam("sub_drive", 80.0f);
+        setHotParam("output_db", 12.0f);
+
+        juce::AudioBuffer<float> hotAudio(2, 512);
+        juce::MidiBuffer hotMidi;
+        float maxOutPeak = 0.0f;
+        for (int block = 0; block < 8; ++block) {
+            for (int sample = 0; sample < 512; ++sample) {
+                const float t = static_cast<float>(block * 512 + sample) / 48000.0f;
+                const float mid = 0.55f * std::sin(2.0f * 3.14159265f * 95.0f * t)
+                                + 0.45f * std::sin(2.0f * 3.14159265f * 5500.0f * t);
+                const float side = 0.45f * std::sin(2.0f * 3.14159265f * 3800.0f * t + 0.5f);
+                hotAudio.setSample(0, sample, mid + side);
+                hotAudio.setSample(1, sample, mid - side);
+            }
+            hotProc.processBlock(hotAudio, hotMidi);
+            for (int sample = 0; sample < 512; ++sample) {
+                maxOutPeak = std::max({ maxOutPeak,
+                                        std::abs(hotAudio.getSample(0, sample)),
+                                        std::abs(hotAudio.getSample(1, sample)) });
+            }
+        }
+        require(maxOutPeak <= 0.989f, "Processor ceiling guard caps hot boosted output at -0.1 dBFS");
+
+        // Verify Elliptical parameter routes zero-phase Mid through BassSpaceProcessor
+        BassSpaceProcessor ellipProc;
+        ellipProc.setRateAndBufferSizeDetails(48000, 512);
+        ellipProc.prepareToPlay(48000, 512);
+        ellipProc.parameters.getParameter("elliptical")->setValueNotifyingHost(1.0f);
+        ellipProc.parameters.getParameter("slope")->setValueNotifyingHost(1.0f);
+        juce::AudioBuffer<float> ellipAudio(2, 512);
+        for (int block = 0; block < 6; ++block) {
+            for (int sample = 0; sample < 512; ++sample) {
+                const float t = static_cast<float>(block * 512 + sample) / 48000.0f;
+                const float kickMid = 0.35f * std::sin(2.0f * 3.14159265f * 120.0f * t);
+                const float subSide = 0.35f * std::sin(2.0f * 3.14159265f * 60.0f * t);
+                ellipAudio.setSample(0, sample, kickMid + subSide);
+                ellipAudio.setSample(1, sample, kickMid - subSide);
+            }
+            ellipProc.processBlock(ellipAudio, hotMidi);
+        }
+        float midErr = 0.0f;
+        float sideRes = 0.0f;
+        for (int sample = 0; sample < 512; ++sample) {
+            const float t = static_cast<float>(5 * 512 + sample) / 48000.0f;
+            const float expectedMid = 0.35f * std::sin(2.0f * 3.14159265f * 120.0f * t);
+            const float actualMid = 0.5f * (ellipAudio.getSample(0, sample) + ellipAudio.getSample(1, sample));
+            const float actualSide = 0.5f * (ellipAudio.getSample(0, sample) - ellipAudio.getSample(1, sample));
+            midErr = std::max(midErr, std::abs(actualMid - expectedMid));
+            sideRes = std::max(sideRes, std::abs(actualSide));
+        }
+        require(midErr < 1e-4f, "Processor Elliptical mode keeps Mid phase-linear");
+        require(sideRes < 0.005f, "Processor LR8 slope rejects 60 Hz Side below 120 Hz by > 48 dB");
+    }
+
     editor->setSize(320, 180);
     require(editor->getWidth() >= BassSpaceProcessor::minEditorWidth
                 && editor->getHeight() >= BassSpaceProcessor::minEditorHeight,

@@ -43,6 +43,41 @@ public:
         m2_ = mLp - mHp;
     }
 
+    void setTptLowPass(double warpedFreq, double damping) noexcept {
+        a1_ = 1.0 / (1.0 + warpedFreq * (warpedFreq + damping));
+        a2_ = warpedFreq * a1_;
+        a3_ = warpedFreq * a2_;
+        m0_ = 0.0;
+        m1_ = 0.0;
+        m2_ = 1.0;
+    }
+
+    void setTptHighPass(double warpedFreq, double damping) noexcept {
+        a1_ = 1.0 / (1.0 + warpedFreq * (warpedFreq + damping));
+        a2_ = warpedFreq * a1_;
+        a3_ = warpedFreq * a2_;
+        m0_ = 1.0;
+        m1_ = -damping;
+        m2_ = -1.0;
+    }
+
+    // Symmetrical TPT Baxandall / Butterworth high-shelf (H(+dB) * H(-dB) == 1)
+    void setTptHighShelf(double pivotWarpedFreq, double gainDb) noexcept {
+        constexpr double kLn10Over80 = 0.028782313662425573;
+        constexpr double kDamp = 1.4142135623730951;
+        const double sqrtAmp = std::exp(gainDb * kLn10Over80);
+        const double amp = sqrtAmp * sqrtAmp;
+        const double ampSq = amp * amp;
+        const double g = pivotWarpedFreq * sqrtAmp;
+
+        a1_ = 1.0 / (1.0 + g * (g + kDamp));
+        a2_ = g * a1_;
+        a3_ = g * a2_;
+        m0_ = ampSq;
+        m1_ = kDamp * (1.0 - amp) * amp;
+        m2_ = 1.0 - ampSq;
+    }
+
     void reset() noexcept {
         ic1eq_ = 0.0;
         ic2eq_ = 0.0;

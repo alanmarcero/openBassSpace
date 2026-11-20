@@ -47,6 +47,8 @@ inline alanmarcero::suite::ParameterSnapshot valuesFor(const FactoryPreset& pres
         { kUpperTilt, preset.upperTilt },
         { kSoloLow, preset.soloLow },
         { kBypass, 0.0f },
+        { kSlope, 0.0f },
+        { kElliptical, 0.0f },
     };
 }
 

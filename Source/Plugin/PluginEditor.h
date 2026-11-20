@@ -29,6 +29,8 @@ private:
     juce::Slider outputDbSlider_;
     juce::Slider upperTiltSlider_;
     juce::TextButton soloLowButton_{"SOLO BASS"};
+    juce::TextButton slopeButton_{"48 dB LR8"};
+    juce::TextButton ellipticalButton_{"ELLIPTICAL"};
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label upperWidthLabel_;
@@ -58,6 +60,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputDbAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> upperTiltAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> soloLowAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> slopeAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> ellipticalAttachment_;
 
     std::unique_ptr<juce::Drawable> stereoField_;
     juce::Image faceplate_;
