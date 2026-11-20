@@ -39,6 +39,8 @@ BassSpaceProcessor::BassSpaceProcessor()
     upperTiltParam_ = parameters.getRawParameterValue(bass_space::params::kUpperTilt);
     soloLowParam_ = parameters.getRawParameterValue(bass_space::params::kSoloLow);
     bypassParam_ = parameters.getRawParameterValue(bass_space::params::kBypass);
+    slopeParam_ = parameters.getRawParameterValue(bass_space::params::kSlope);
+    ellipticalParam_ = parameters.getRawParameterValue(bass_space::params::kElliptical);
 
     currentProgram_ = 0;
     currentPresetName_ = bass_space::factoryPresets().front().name;
@@ -49,6 +51,7 @@ BassSpaceProcessor::BassSpaceProcessor()
 void BassSpaceProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     processingRate_ = sampleRate;
     shaper_.prepare(sampleRate);
+    outputCeilingGuard_.prepare(sampleRate);
     outputGain_.reset(sampleRate, 0.02);
     bypassMix_.reset(sampleRate, 0.010);
     dryBuffer_.setSize(2, juce::jmax(samplesPerBlock, 4096), false, false, true);
@@ -57,11 +60,13 @@ void BassSpaceProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
 
 void BassSpaceProcessor::releaseResources() {
     shaper_.reset();
+    outputCeilingGuard_.reset();
 }
 
 void BassSpaceProcessor::reset() {
     artworkClock_.reset();
     shaper_.reset();
+    outputCeilingGuard_.reset();
     const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
     outputGain_.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(decibels));
     bypassMix_.setCurrentAndTargetValue(currentBypass() ? 0.0f : 1.0f);
@@ -118,7 +123,13 @@ void BassSpaceProcessor::processAudio(juce::AudioBuffer<float>& buffer, juce::Mi
     const float freq = currentFrequency();
     const float widthRatio = currentWidth() * 0.01f;
 
+    const auto slopeMode = currentLr8Slope()
+        ? analog_master::core::CrossoverSlope::LR8_48dB
+        : analog_master::core::CrossoverSlope::LR4_24dB;
+
     shaper_.setCrossoverFrequency(freq);
+    shaper_.setCrossoverSlope(slopeMode);
+    shaper_.setEllipticalMode(currentElliptical());
     shaper_.setWidth(widthRatio);
     shaper_.setUpperWidth(currentUpperWidth() * 0.01f);
     shaper_.setStereoizeAmount(currentStereoize() * 0.01f);
@@ -144,11 +155,17 @@ void BassSpaceProcessor::processAudio(juce::AudioBuffer<float>& buffer, juce::Mi
     for (int sample = 0; sample < numSamples; ++sample) {
         const float gain = outputGain_.getNextValue();
         const float mix = mixBypass ? bypassMix_.getNextValue() : 1.0f;
-        for (int channel = 0; channel < numChannels; ++channel) {
-            const float dry = dryBuffer_.getSample(channel, sample);
-            const float wet = channels[channel][sample] * gain;
-            channels[channel][sample] = dry + mix * (wet - dry);
+        float wetLeft = channels[0][sample] * gain;
+        float wetRight = channels[1] != nullptr ? channels[1][sample] * gain : wetLeft;
+        outputCeilingGuard_.process(wetLeft, wetRight);
+
+        const float dryLeft = dryBuffer_.getSample(0, sample);
+        channels[0][sample] = dryLeft + mix * (wetLeft - dryLeft);
+        if (channels[1] != nullptr) {
+            const float dryRight = dryBuffer_.getSample(1, sample);
+            channels[1][sample] = dryRight + mix * (wetRight - dryRight);
         }
+
         const double leftValue = channels[0][sample];
         const double rightValue = channels[1] != nullptr ? channels[1][sample] : leftValue;
         cross += leftValue * rightValue;
@@ -354,6 +371,8 @@ void BassSpaceProcessor::restoreParameterTree(juce::ValueTree tree) {
     ensureDefault(bass_space::params::kUpperTilt, 0.0f);
     ensureDefault(bass_space::params::kSoloLow, 0.0f);
     ensureDefault(bass_space::params::kBypass, 0.0f);
+    ensureDefault(bass_space::params::kSlope, 0.0f);
+    ensureDefault(bass_space::params::kElliptical, 0.0f);
     parameters.replaceState(tree);
 }
 

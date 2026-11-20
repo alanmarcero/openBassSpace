@@ -77,6 +77,14 @@ public:
         return bypassParam_ != nullptr && bypassParam_->load(std::memory_order_relaxed) >= 0.5f;
     }
 
+    [[nodiscard]] bool currentLr8Slope() const noexcept {
+        return slopeParam_ != nullptr && slopeParam_->load(std::memory_order_relaxed) >= 0.5f;
+    }
+
+    [[nodiscard]] bool currentElliptical() const noexcept {
+        return ellipticalParam_ != nullptr && ellipticalParam_->load(std::memory_order_relaxed) >= 0.5f;
+    }
+
     [[nodiscard]] float currentCorrelation() const noexcept {
         return correlation_.load(std::memory_order_relaxed);
     }
@@ -121,6 +129,8 @@ private:
     std::atomic<float>* upperTiltParam_ = nullptr;
     std::atomic<float>* soloLowParam_ = nullptr;
     std::atomic<float>* bypassParam_ = nullptr;
+    std::atomic<float>* slopeParam_ = nullptr;
+    std::atomic<float>* ellipticalParam_ = nullptr;
     ArtworkBeatClock artworkClock_;
     double processingRate_ = 48000.0;
     std::atomic<float> correlation_ {0.0f};
@@ -128,6 +138,7 @@ private:
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassMix_;
     juce::AudioBuffer<float> dryBuffer_;
     analog_master::core::StereoFieldShaper shaper_;
+    analog_master::core::StereoCeilingGuard outputCeilingGuard_;
 
     alanmarcero::suite::PresetLibrary presets_;
     std::array<alanmarcero::suite::ParameterSnapshot, 2> slots_;

@@ -118,16 +118,14 @@ jobs:
           body: |
             ![Native editor](https://raw.githubusercontent.com/alanmarcero/openBassSpace/${{ github.ref_name }}/docs/screenshots/preview.png)
 
-            2.6.1 restores the plugin factory. The 2.6.0 suite refactor removed createPluginFilter from PluginProcessor.cpp, so the Windows VST3 link failed with LNK2001.
+            2.7.0 upgrades the mastering bass-shaping DSP and adds crossover slope and elliptical controls:
 
-            2.6.0 changes included in this release:
-
-            - The editor resizes from 720×520 with no locked aspect ratio. The size is stored in the session.
-            - Host bypass crossfades back to the dry input.
-            - Factory programs appear in the editor and the host program list.
-            - User presets can be saved, renamed, and deleted.
-            - Undo and redo.
-            - A and B compare, with copy from A to B and B to A.
+            - Selectable 24 dB/oct LR4 or 48 dB/oct LR8 TPT crossover with continuous per-sample cutoff smoothing.
+            - Elliptical Mid mode high-passing only the Side channel while keeping Mid phase-linear.
+            - Frequency-progressive bass width (keeping sub-35 Hz centered) and energy-preserving low-band mono sum makeup.
+            - Sub drive with octave-down f/2 sub-harmonic synthesis, ADAA-1 saturation, and phase-matched post-LPF.
+            - Symmetrical TPT upper-band tilt shelf smoothed in log-gain dB, sample-rate-invariant 4-stage Schroeder/Velvet stereoizer, and true-peak-safe M/S ceiling guard at -0.1 dBFS.
+            - Added Slope and Elliptical Mid buttons in the editor and refreshed the preview screenshot.
           generate_release_notes: true
 
   update-preview:

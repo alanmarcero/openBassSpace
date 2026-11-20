@@ -55,6 +55,19 @@ void configureValue(juce::Label& label, juce::Colour colour) {
     label.setColour(juce::Label::textColourId, colour);
 }
 
+void configureModeButton(juce::TextButton& button, juce::Colour activeColour,
+                         const juce::String& title, const juce::String& description, const juce::String& tooltip) {
+    button.setClickingTogglesState(true);
+    button.setColour(juce::TextButton::buttonColourId, kPanel);
+    button.setColour(juce::TextButton::buttonOnColourId, activeColour);
+    button.setColour(juce::TextButton::textColourOffId, kTextWhite);
+    button.setColour(juce::TextButton::textColourOnId, kBackground);
+    button.setTitle(title);
+    button.setDescription(description);
+    button.setTooltip(tooltip);
+    button.setWantsKeyboardFocus(false);
+}
+
 void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slider, juce::Label& value) {
     name.setBounds(cell.removeFromTop(16));
     value.setBounds(cell.removeFromBottom(18));
@@ -124,8 +137,8 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     configureValue(outputDbValueLabel_, kAccentMint);
 
     configureKnob(subDriveSlider_, kAccentMint, 0.0, "Sub harmonic drive",
-                  "Adds mono-locked harmonic warmth to the bass band below the crossover.",
-                  "Add mono-locked harmonic saturation to the low band below the crossover.");
+                  "Adds mono-locked sub-octave and harmonic warmth to the bass band.",
+                  "Blend mono-locked sub-octave synthesis and ADAA saturation into the bass band.");
     configureName(subDriveLabel_, "Sub drive");
     configureValue(subDriveValueLabel_, kAccentMint);
 
@@ -135,15 +148,15 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     configureName(upperTiltLabel_, "Upper tilt");
     configureValue(upperTiltValueLabel_, kAccentGold);
 
-    soloLowButton_.setClickingTogglesState(true);
-    soloLowButton_.setColour(juce::TextButton::buttonColourId, kPanel);
-    soloLowButton_.setColour(juce::TextButton::buttonOnColourId, kAccentMint);
-    soloLowButton_.setColour(juce::TextButton::textColourOffId, kTextWhite);
-    soloLowButton_.setColour(juce::TextButton::textColourOnId, kBackground);
-    soloLowButton_.setTitle("Solo bass band");
-    soloLowButton_.setDescription("Auditions only the low-frequency band below the crossover.");
-    soloLowButton_.setTooltip("Audition the isolated bass band below the crossover frequency.");
-    soloLowButton_.setWantsKeyboardFocus(false);
+    configureModeButton(soloLowButton_, kAccentMint, "Solo bass band",
+                        "Auditions only the low-frequency band below the crossover.",
+                        "Audition the isolated bass band below the crossover frequency.");
+    configureModeButton(slopeButton_, kAccentGold, "48 dB/oct LR8 crossover",
+                        "Switches crossover slope between 24 dB/oct LR4 and 48 dB/oct LR8.",
+                        "Enable 8th-order 48 dB/oct Linkwitz-Riley sub/mid separation.");
+    configureModeButton(ellipticalButton_, kAccentMint, "Elliptical zero-phase Mid",
+                        "High-passes only the Side channel while keeping Mid 100% phase-linear.",
+                        "Enable mastering Elliptical EQ topology for zero-phase-shift Mid transients.");
 
     for (auto* component : std::initializer_list<juce::Component*>{
              &freqSlider_, &freqLabel_, &freqValueLabel_,
@@ -154,7 +167,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
              &outputDbSlider_, &outputDbLabel_, &outputDbValueLabel_,
              &subDriveSlider_, &subDriveLabel_, &subDriveValueLabel_,
              &upperTiltSlider_, &upperTiltLabel_, &upperTiltValueLabel_,
-             &soloLowButton_, &suiteStrip_ }) {
+             &soloLowButton_, &slopeButton_, &ellipticalButton_, &suiteStrip_ }) {
         addAndMakeVisible(component);
     }
 
@@ -179,6 +192,10 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         processor_.parameters, bass_space::params::kUpperTilt, upperTiltSlider_);
     soloLowAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kSoloLow, soloLowButton_);
+    slopeAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        processor_.parameters, bass_space::params::kSlope, slopeButton_);
+    ellipticalAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        processor_.parameters, bass_space::params::kElliptical, ellipticalButton_);
 
     presetBrowser_.onChanged = [this] { suiteStrip_.refresh(); };
     alanmarcero::suite::SuiteActions actions;
@@ -246,7 +263,7 @@ void BassSpaceEditor::timerCallback() {
     updateValueLabels();
     suiteStrip_.refresh();
     if (!ringArea_.isEmpty()) {
-        repaint(ringArea_.getUnion(correlationTrack_.getSmallestIntegerContainer()));
+        repaint(ringArea_.getUnion(correlationTrack_.getSmallestIntegerContainer()).getUnion(footerArea_));
     }
 }
 
@@ -401,7 +418,9 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     g.setFont(juce::FontOptions(11.0f));
     g.setColour(kTextDim);
-    g.drawText("4th-order Linkwitz-Riley  |  independent bass and upper width  |  mono-compatible stereoize",
+    const juce::String slopeText = processor_.currentLr8Slope() ? "8th-order Linkwitz-Riley (48 dB)" : "4th-order Linkwitz-Riley";
+    const juce::String topologyText = processor_.currentElliptical() ? "elliptical zero-phase Mid" : "independent bass and upper width";
+    g.drawText(slopeText + "  |  " + topologyText + "  |  Velvet stereoize",
                footerArea_, juce::Justification::centred);
 }
 
@@ -461,7 +480,15 @@ void BassSpaceEditor::resized() {
     placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_, subDriveValueLabel_);
     placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_, outputDbValueLabel_);
     placeKnob(cells.removeFromLeft(cellW), upperTiltLabel_, upperTiltSlider_, upperTiltValueLabel_);
-    soloLowButton_.setBounds(cells.withSizeKeepingCentre(juce::jmin(124, juce::jmax(72, cells.getWidth() - 8)), 36));
+    const int buttonWidth = juce::jmin(124, juce::jmax(72, cells.getWidth() - 8));
+    const int buttonHeight = juce::jlimit(24, 30, (cells.getHeight() - 10) / 3);
+    const int totalStackHeight = buttonHeight * 3 + 8;
+    auto buttonColumn = cells.withSizeKeepingCentre(buttonWidth, totalStackHeight);
+    soloLowButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
+    buttonColumn.removeFromTop(4);
+    slopeButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
+    buttonColumn.removeFromTop(4);
+    ellipticalButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
 
     if (presetBrowser_.isVisible()) {
         positionPresetBrowser();

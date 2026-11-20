@@ -79,6 +79,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         false
     ));
 
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{ kSlope, 2 },
+        "Crossover Slope",
+        juce::StringArray{ "24 dB/oct (LR4)", "48 dB/oct (LR8)" },
+        0
+    ));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{ kElliptical, 2 },
+        "Elliptical Mid",
+        false
+    ));
+
     return { parameters.begin(), parameters.end() };
 }
 

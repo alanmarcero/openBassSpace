@@ -1,72 +1,112 @@
 #include "LinkwitzRiley.h"
 #include <algorithm>
+#include <cmath>
 #include <numbers>
 
 namespace analog_master::core {
 
+namespace {
+
+constexpr double kMinSampleRate = 8000.0;
+constexpr double kDefaultSampleRate = 44100.0;
+constexpr double kSmoothingTimeSeconds = 0.0045;
+// 4th-order Butterworth damping factors (2 * cos(pi/8) and 2 * cos(3*pi/8)) cascaded twice for LR8
+constexpr double kBw4DampA = 1.8477590650225735;
+constexpr double kBw4DampB = 0.7653668647301796;
+
+} // namespace
+
 LinkwitzRiley4::LinkwitzRiley4() {
-    prepare(44100.0);
+    prepare(kDefaultSampleRate);
 }
 
 void LinkwitzRiley4::prepare(double sampleRate) noexcept {
-    if (sampleRate < 8000.0) {
-        sampleRate = 44100.0;
-    }
-    sampleRate_ = sampleRate;
+    const double validRate = sampleRate >= kMinSampleRate ? sampleRate : kDefaultSampleRate;
+    sampleRate_ = validRate;
+    smoothAlpha_ = 1.0 - std::exp(-1.0 / (kSmoothingTimeSeconds * sampleRate_));
+
+    const double safeCutoff = std::clamp(crossoverHz_, 20.0, sampleRate_ * 0.49);
+    targetG_ = std::tan(std::numbers::pi * safeCutoff / sampleRate_);
     reset();
-    updateCoefficients();
 }
 
 void LinkwitzRiley4::reset() noexcept {
-    lp1_.reset();
-    lp2_.reset();
-    hp1_.reset();
-    hp2_.reset();
+    for (auto& section : lpSections_) {
+        section.reset();
+    }
+    for (auto& section : hpSections_) {
+        section.reset();
+    }
+    currentG_ = targetG_;
+    hasProcessed_ = false;
+    applyWarpedCutoff(currentG_);
 }
 
 void LinkwitzRiley4::setCrossoverFrequency(double freqHz) noexcept {
-    if (std::abs(crossoverHz_ - freqHz) < 0.001) {
+    const double safeCutoff = std::clamp(freqHz, 20.0, sampleRate_ * 0.49);
+    if (std::abs(crossoverHz_ - safeCutoff) < 1e-4) {
         return;
     }
-    crossoverHz_ = freqHz;
-    updateCoefficients();
+    crossoverHz_ = safeCutoff;
+    targetG_ = std::tan(std::numbers::pi * crossoverHz_ / sampleRate_);
+    if (!hasProcessed_) {
+        currentG_ = targetG_;
+        applyWarpedCutoff(currentG_);
+    }
 }
 
-void LinkwitzRiley4::updateCoefficients() noexcept {
-    const double sr = sampleRate_ > 1000.0 ? sampleRate_ : 44100.0;
-    const double maxCutoff = sr * 0.49;
-    const double safeCutoff = std::clamp(crossoverHz_, 20.0, maxCutoff);
+void LinkwitzRiley4::setSlope(CrossoverSlope slope) noexcept {
+    if (slope_ == slope) {
+        return;
+    }
+    if (slope == CrossoverSlope::LR8_48dB) {
+        lpSections_[2].reset();
+        lpSections_[3].reset();
+        hpSections_[2].reset();
+        hpSections_[3].reset();
+    }
+    slope_ = slope;
+    applyWarpedCutoff(currentG_);
+}
 
-    const double K = std::tan(std::numbers::pi * safeCutoff / sr);
-    const double K2 = K * K;
-    constexpr double sqrt2 = std::numbers::sqrt2;
+void LinkwitzRiley4::applyWarpedCutoff(double warpedFreq) noexcept {
+    if (slope_ == CrossoverSlope::LR4_24dB) {
+        constexpr double kDampLr4 = std::numbers::sqrt2;
+        lpSections_[0].setTptLowPass(warpedFreq, kDampLr4);
+        lpSections_[1].setTptLowPass(warpedFreq, kDampLr4);
+        hpSections_[0].setTptHighPass(warpedFreq, kDampLr4);
+        hpSections_[1].setTptHighPass(warpedFreq, kDampLr4);
+        return;
+    }
 
-    const double norm = 1.0 / (1.0 + sqrt2 * K + K2);
+    lpSections_[0].setTptLowPass(warpedFreq, kBw4DampA);
+    lpSections_[1].setTptLowPass(warpedFreq, kBw4DampB);
+    lpSections_[2].setTptLowPass(warpedFreq, kBw4DampA);
+    lpSections_[3].setTptLowPass(warpedFreq, kBw4DampB);
 
-    // 2nd-order Butterworth LP coefficients
-    const double lpB0 = K2 * norm;
-    const double lpB1 = 2.0 * lpB0;
-    const double lpB2 = lpB0;
-    const double a1 = 2.0 * (K2 - 1.0) * norm;
-    const double a2 = (1.0 - sqrt2 * K + K2) * norm;
-
-    const BiquadCoeffs lpCoeffs { lpB0, lpB1, lpB2, a1, a2 };
-    lp1_.setCoefficients(lpCoeffs);
-    lp2_.setCoefficients(lpCoeffs);
-
-    // 2nd-order Butterworth HP coefficients
-    const double hpB0 = norm;
-    const double hpB1 = -2.0 * norm;
-    const double hpB2 = norm;
-
-    const BiquadCoeffs hpCoeffs { hpB0, hpB1, hpB2, a1, a2 };
-    hp1_.setCoefficients(hpCoeffs);
-    hp2_.setCoefficients(hpCoeffs);
+    hpSections_[0].setTptHighPass(warpedFreq, kBw4DampA);
+    hpSections_[1].setTptHighPass(warpedFreq, kBw4DampB);
+    hpSections_[2].setTptHighPass(warpedFreq, kBw4DampA);
+    hpSections_[3].setTptHighPass(warpedFreq, kBw4DampB);
 }
 
 CrossoverSplit LinkwitzRiley4::process(float sample) noexcept {
-    float low = lp2_.process(lp1_.process(sample));
-    float high = hp2_.process(hp1_.process(sample));
+    hasProcessed_ = true;
+
+    if (std::abs(targetG_ - currentG_) > 1e-9) {
+        currentG_ += smoothAlpha_ * (targetG_ - currentG_);
+        if (std::abs(targetG_ - currentG_) <= 1e-9) {
+            currentG_ = targetG_;
+        }
+        applyWarpedCutoff(currentG_);
+    }
+
+    float low = lpSections_[1].process(lpSections_[0].process(sample));
+    float high = hpSections_[1].process(hpSections_[0].process(sample));
+    if (slope_ == CrossoverSlope::LR8_48dB) {
+        low = lpSections_[3].process(lpSections_[2].process(low));
+        high = hpSections_[3].process(hpSections_[2].process(high));
+    }
     return { low, high };
 }
 
