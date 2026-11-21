@@ -373,6 +373,7 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         currentProgram_ = 0;
         currentPresetName_ = getProgramName(0);
         history_.clear();
+        history_.selectSlot(activeSlot_);
         return;
     }
 
@@ -404,6 +405,7 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
     }
 
     history_.clear();
+    history_.selectSlot(activeSlot_);
     if (auto* editor = getActiveEditor()) {
         editor->setSize(editorWidth_, editorHeight_);
     }

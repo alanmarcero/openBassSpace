@@ -1047,6 +1047,21 @@ int main(int argc, char** argv) {
         require(!recorder->dirty.isEmpty() && !touchesDial, "a slope change repaints its button and the footer, not the dials");
     }
 
+    {
+        BassSpaceProcessor savedOnB;
+        savedOnB.selectCompareSlot(1);
+        juce::MemoryBlock slotState;
+        savedOnB.getStateInformation(slotState);
+        BassSpaceProcessor restoredOnB;
+        restoredOnB.setStateInformation(slotState.getData(), static_cast<int>(slotState.getSize()));
+        auto* restoredWidth = restoredOnB.parameters.getParameter("width");
+        restoredWidth->beginChangeGesture();
+        restoredWidth->setValueNotifyingHost(restoredWidth->convertTo0to1(70.0f));
+        restoredWidth->endChangeGesture();
+        restoredOnB.selectCompareSlot(0);
+        require(!restoredOnB.canUndo(), "an edit in a restored slot B stays out of slot A's undo history");
+    }
+
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;
