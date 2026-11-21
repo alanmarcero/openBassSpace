@@ -62,8 +62,10 @@ bool PresetLibrary::isFactoryName(const juce::String& name) const {
     return false;
 }
 
+// Compares preset files, because names that differ only in characters safeFileName drops share one file.
 bool PresetLibrary::hasUser(const juce::String& name) const {
-    return std::any_of(user_.begin(), user_.end(), [&name](const PresetEntry& entry) { return sameName(entry.name, name); });
+    const auto file = fileFor(name);
+    return std::any_of(user_.begin(), user_.end(), [this, &file](const PresetEntry& entry) { return fileFor(entry.name) == file; });
 }
 
 PresetEntry* PresetLibrary::findUser(const juce::String& name) {
@@ -209,17 +211,18 @@ bool PresetLibrary::renameUser(const juce::String& from, const juce::String& to)
     if (existing == nullptr) {
         return false;
     }
-    if (!sameName(source, target) && findUser(target) != nullptr) {
+    const auto oldFile = fileFor(source);
+    const bool sameFile = oldFile == fileFor(target);
+    if (!sameFile && hasUser(target)) {
         return false;
     }
 
     const bool favorite = existing->favorite;
     const auto values = existing->values;
-    const auto oldFile = fileFor(source);
     if (!saveUser(target, values)) {
         return false;
     }
-    if (!sameName(source, target)) {
+    if (!sameFile) {
         oldFile.deleteFile();
     }
     rescan();

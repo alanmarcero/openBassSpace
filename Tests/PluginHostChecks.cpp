@@ -1183,6 +1183,11 @@ int main(int argc, char** argv) {
         pump();
         require(browsingLibrary.hasUser("Gamma") && !browsingLibrary.hasUser("Alpha") && browsingLibrary.hasUser("Beta"),
                 "Rename takes its name from the name field and renames the selected preset");
+        nameField->setText("Gamma!", true);
+        pump();
+        save->triggerClick();
+        pump();
+        require(save->getButtonText() == "Replace?", "Save asks before writing over a preset that shares its file name");
 
         const auto storedWidth = [&browsingLibrary](const juce::String& name) {
             const auto& user = browsingLibrary.user();
@@ -1236,6 +1241,28 @@ int main(int argc, char** argv) {
         soloEditor.refreshDisplay();
         require(std::abs(upper->getAlpha() - 1.0f) < 0.01f && !upper->getTooltip().contains("Solo bass"),
                 "turning Solo bass off brings the upper-band dials back");
+    }
+
+    {
+        const auto collisionDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                            .getChildFile("openBassSpace-collision-tests");
+        collisionDirectory.deleteRecursively();
+        BassSpaceProcessor colliding;
+        colliding.setUserPresetDirectory(collisionDirectory);
+        auto& collidingLibrary = colliding.presetLibrary();
+        require(collidingLibrary.saveUser("Bass", colliding.currentParameterValues())
+                    && collidingLibrary.saveUser("Lead", colliding.currentParameterValues()),
+                "collision presets save");
+        const auto named = [&collidingLibrary](const juce::String& name) {
+            const auto& user = collidingLibrary.user();
+            return std::any_of(user.begin(), user.end(), [&name](const auto& entry) { return entry.name == name; });
+        };
+        require(collidingLibrary.hasUser("Bass!"), "a name that saves to an existing preset's file counts as taken");
+        require(!collidingLibrary.renameUser("Lead", "Bass!") && named("Bass") && named("Lead"),
+                "Rename refuses a name that would write over another preset");
+        require(collidingLibrary.renameUser("Bass", "Bass!") && named("Bass!") && collidingLibrary.user().size() == 2,
+                "a rename that keeps the same file keeps the preset");
+        collisionDirectory.deleteRecursively();
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString
