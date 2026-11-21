@@ -92,6 +92,44 @@ int main(int argc, char** argv) {
     p.setRateAndBufferSizeDetails(48000, 256);
     p.prepareToPlay(48000, 256);
 
+    for (auto* parameter : p.getParameters()) {
+        auto* floatParameter = dynamic_cast<juce::AudioParameterFloat*>(parameter);
+        if (floatParameter == nullptr) {
+            continue;
+        }
+        for (const float normalised : { 0.0f, 0.13f, 0.5f, 0.87f, 1.0f, parameter->getDefaultValue() }) {
+            const auto text = parameter->getText(normalised, 0);
+            const float parsed = parameter->getValueForText(text);
+            const auto label = floatParameter->paramID + " reads back " + text;
+            require(parameter->getText(parsed, 0) == text, label.toRawUTF8());
+        }
+        for (const float normalised : { 0.0f, 1.0f, parameter->getDefaultValue() }) {
+            const float parsed = parameter->getValueForText(parameter->getText(normalised, 0));
+            const auto label = floatParameter->paramID + " round-trips its range ends and default";
+            require(std::abs(parsed - normalised) < 1.0e-4f, label.toRawUTF8());
+        }
+    }
+    const auto typed = [&p](const char* id, const char* text) {
+        auto* parameter = p.parameters.getParameter(id);
+        return parameter->convertFrom0to1(parameter->getValueForText(text));
+    };
+    const auto shown = [&p](const char* id, float value) {
+        auto* parameter = p.parameters.getParameter(id);
+        return parameter->getText(parameter->convertTo0to1(value), 0);
+    };
+    require(std::abs(typed("stereoize", "50") - 50.0f) < 0.01f && std::abs(typed("stereoize", "50%") - 50.0f) < 0.01f,
+            "percent controls read 50 and 50% as 50%");
+    require(std::abs(typed("frequency", "0.12k") - 120.0f) < 0.01f
+                && std::abs(typed("frequency", "0.08 kHz") - 80.0f) < 0.01f,
+            "frequency reads k and kHz as thousands");
+    require(std::abs(typed("output_db", "-6 dB") + 6.0f) < 0.01f && std::abs(typed("upper_tilt", "+3.5") - 3.5f) < 0.01f,
+            "gain controls read signed numbers with or without dB");
+    require(shown("output_db", 3.0f) == "+3.0 dB" && shown("output_db", -0.0001f) == "0.0 dB"
+                && shown("upper_tilt", -2.5f) == "-2.5 dB",
+            "gain shows one decimal, a plus on boosts and never -0.0 dB");
+    require(shown("frequency", 120.0f) == "120 Hz" && shown("width", 55.0f) == "55%" && shown("sub_drive", 100.0f) == "100%",
+            "frequency and amounts show whole units");
+
     auto* outputDb = p.parameters.getParameter("output_db");
     require(outputDb != nullptr, "Output dB parameter missing");
     auto* upperWidthParam = p.parameters.getParameter("upper_width");

@@ -1,9 +1,27 @@
 #include "Parameters.h"
 
 namespace bass_space::params {
+namespace {
+
+juce::String percentText(float percent, int) {
+    return juce::String(juce::roundToInt(percent)) + "%";
+}
+
+// Rounds before the sign check, so values near zero read "0.0 dB", never "-0.0 dB".
+juce::String decibelText(float decibels, int) {
+    const float tenths = std::round(decibels * 10.0f) / 10.0f;
+    if (std::abs(tenths) < 0.05f) {
+        return "0.0 dB";
+    }
+    return (tenths > 0.0f ? "+" : "") + juce::String(tenths, 1) + " dB";
+}
+
+} // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
+    const auto percent = juce::AudioParameterFloatAttributes().withStringFromValueFunction(percentText);
+    const auto decibels = juce::AudioParameterFloatAttributes().withStringFromValueFunction(decibelText);
 
     // Frequency: 20 Hz to 500 Hz, default 120 Hz, skewed to emphasize 60-200 Hz
     auto freqRange = juce::NormalisableRange<float>(20.0f, 500.0f, 0.5f, 0.45f);
@@ -12,7 +30,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Frequency",
         freqRange,
         120.0f,
-        juce::AudioParameterFloatAttributes().withLabel("Hz")
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction([](float hertz, int) { return juce::String(juce::roundToInt(hertz)) + " Hz"; })
+            .withValueFromStringFunction([](const juce::String& text) {
+                const float number = text.getFloatValue();
+                return text.containsIgnoreCase("k") ? number * 1000.0f : number;
+            })
     ));
 
     // Width: 0% to 200%, default 0% (Mono), 100% is neutral, 200% is wide
@@ -22,7 +45,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Width",
         widthRange,
         0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("%")
+        percent
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -30,7 +53,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Upper Width",
         widthRange,
         100.0f,
-        juce::AudioParameterFloatAttributes().withLabel("%")
+        percent
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -38,7 +61,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Stereoize",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
         0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("%")
+        percent
     ));
 
     // Post-shaper output gain in decibels
@@ -47,7 +70,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Output",
         juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f),
         0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")
+        decibels
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -55,7 +78,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Sub Drive",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
         0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("%")
+        percent
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -63,7 +86,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
         "Upper Tilt",
         juce::NormalisableRange<float>(-6.0f, 6.0f, 0.1f),
         0.0f,
-        juce::AudioParameterFloatAttributes().withLabel("dB")
+        decibels
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterBool>(
