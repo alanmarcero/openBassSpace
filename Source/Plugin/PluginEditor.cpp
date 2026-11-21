@@ -31,6 +31,16 @@ void drawGlow(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour col
     g.fillEllipse(centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f);
 }
 
+juce::Colour widthColour(float percent) {
+    if (percent < 10.0f) {
+        return kAccentMint;
+    }
+    if (percent > 105.0f) {
+        return kAccentGold;
+    }
+    return kTextWhite;
+}
+
 void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickValue,
                    const juce::String& title, const juce::String& description, const juce::String& tooltip) {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -383,8 +393,6 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     const auto arcCentre = ringArea_.toFloat().getCentre().translated(
         0.0f, static_cast<float>(ringArea_.getHeight()) * 0.08f);
-    const float currentW = processor_.currentUpperWidth();
-    const float spreadAngle = (currentW / 200.0f) * (std::numbers::pi_v<float> * 0.42f);
 
     if (stereoField_) {
         const float phase = processor_.artworkPhase();
@@ -402,42 +410,55 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     g.drawDashedLine(juce::Line<float>(arcCentre.x, arcCentre.y - beam, arcCentre.x, arcCentre.y + beam * 0.28f),
                      dashes, 2, 1.0f);
 
-    juce::Path wings;
+    // Long thin wings show the upper band. Short thick wings show the bass band.
+    const float bassWidth = processor_.currentWidth();
+    const float upperWidth = processor_.currentUpperWidth();
+    const bool soloBass = processor_.currentSoloLow();
     const float wingLength = juce::jlimit(28.0f, 64.0f, static_cast<float>(ringArea_.getHeight()) * 0.28f);
-    wings.startNewSubPath(arcCentre);
-    wings.lineTo(arcCentre.x - std::sin(spreadAngle) * wingLength, arcCentre.y - std::cos(spreadAngle) * wingLength);
-    wings.startNewSubPath(arcCentre);
-    wings.lineTo(arcCentre.x + std::sin(spreadAngle) * wingLength, arcCentre.y - std::cos(spreadAngle) * wingLength);
-
-    const auto wingCol = currentW < 10.0f ? kAccentMint : (currentW > 105.0f ? kAccentGold : kTextWhite);
-    g.setColour(wingCol.withAlpha(0.9f));
-    g.strokePath(wings, juce::PathStrokeType(currentW < 10.0f ? 3.5f : 2.5f,
-                                             juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    g.setColour(wingCol);
+    struct Wings { float width; float length; float thickness; juce::Colour colour; };
+    const std::array<Wings, 2> bands {{
+        { upperWidth, wingLength, 2.5f, widthColour(upperWidth).withAlpha(soloBass ? 0.25f : 0.9f) },
+        { bassWidth, wingLength * 0.55f, 5.0f, widthColour(bassWidth) },
+    }};
+    for (const auto& band : bands) {
+        const float spread = band.width / 200.0f * std::numbers::pi_v<float> * 0.42f;
+        const juce::Point<float> tip(std::sin(spread) * band.length, -std::cos(spread) * band.length);
+        juce::Path wings;
+        wings.startNewSubPath(arcCentre.translated(-tip.x, tip.y));
+        wings.lineTo(arcCentre);
+        wings.lineTo(arcCentre + tip);
+        g.setColour(band.colour);
+        g.strokePath(wings, juce::PathStrokeType(band.thickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+    g.setColour(widthColour(bassWidth));
     g.fillEllipse(arcCentre.x - 3.5f, arcCentre.y - 3.5f, 7.0f, 7.0f);
 
-    juce::String modeText = "100% FLAT";
-    juce::Colour modeCol = kTextWhite;
-    if (currentW < 5.0f) {
-        modeText = "UPPER BAND MONO";
-        modeCol = kAccentMint;
-    } else if (currentW < 95.0f) {
-        modeText = "UPPER BAND NARROW";
-        modeCol = kAccentMint.withAlpha(0.85f);
-    } else if (currentW > 105.0f) {
-        modeText = "UPPER BAND WIDE";
-        modeCol = kAccentGold;
-    }
-
-    auto modeArea = ringArea_.toFloat();
-    g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
-    g.setColour(modeCol);
-    g.drawText(modeText, modeArea.removeFromBottom(16.0f), juce::Justification::centred);
-    g.setFont(juce::FontOptions(11.0f));
-    g.setColour(kTextDim);
-    g.drawText("Bass " + juce::String(juce::roundToInt(processor_.currentWidth())) + "%  |  upper band above "
-                   + juce::String(juce::roundToInt(processor_.currentFrequency())) + " Hz",
-               modeArea.removeFromBottom(16.0f), juce::Justification::centred);
+    const auto widthCaption = [](const juce::RangedAudioParameter& width) {
+        if (width.getValue() <= 0.0f) {
+            return juce::String("MONO");
+        }
+        return width.getCurrentValueAsText();
+    };
+    const auto& parameters = processor_.parameters;
+    const auto upperCaption = [&]() -> juce::String {
+        if (soloBass) {
+            return "UPPER MUTED";
+        }
+        const auto upper = "UPPER " + widthCaption(*parameters.getParameter(bass_space::params::kUpperWidth));
+        if (processor_.currentStereoize() < 0.5f) {
+            return upper;
+        }
+        return upper + " + STEREOIZE " + parameters.getParameter(bass_space::params::kStereoize)->getCurrentValueAsText();
+    }();
+    const juce::Font captionFont(juce::FontOptions(10.5f, juce::Font::bold));
+    juce::AttributedString caption;
+    caption.setJustification(juce::Justification::centred);
+    caption.append("BASS " + widthCaption(*parameters.getParameter(bass_space::params::kWidth)) + " below "
+                       + parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText(),
+                   captionFont, widthColour(bassWidth));
+    caption.append("  |  ", captionFont, kTextDim);
+    caption.append(upperCaption, captionFont, widthColour(upperWidth).withAlpha(soloBass ? 0.6f : 1.0f));
+    caption.draw(g, ringArea_.toFloat().removeFromBottom(16.0f));
 
     const float correlation = juce::jlimit(-1.0f, 1.0f, processor_.currentCorrelation());
     g.setColour(kPanelEdge);

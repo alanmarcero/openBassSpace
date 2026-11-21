@@ -113,6 +113,16 @@ static int smallestDial(juce::Component& parent) {
     return smallest;
 }
 
+static int changedPixels(const juce::Image& before, const juce::Image& after) {
+    int changed = 0;
+    for (int y = 0; y < before.getHeight(); ++y) {
+        for (int x = 0; x < before.getWidth(); ++x) {
+            changed += before.getPixelAt(x, y) != after.getPixelAt(x, y) ? 1 : 0;
+        }
+    }
+    return changed;
+}
+
 static void checkLayout(juce::Component& editor, const juce::String& when) {
     const auto overlap = overlappingChildren(editor);
     require(overlap.isEmpty(), (when + ": " + overlap).toRawUTF8());
@@ -377,11 +387,7 @@ int main(int argc, char** argv) {
     p.processBlock(clockAudio, clockMidi);
     require(std::abs(p.artworkPhase() - 0.875f) < 0.0001f, "SVG follows a host seek");
     const auto offbeat = editor->createComponentSnapshot(stereoField->getBounds());
-    int changed = 0;
-    for (int y = 0; y < onbeat.getHeight(); ++y)
-        for (int x = 0; x < onbeat.getWidth(); ++x)
-            if (onbeat.getPixelAt(x, y) != offbeat.getPixelAt(x, y)) ++changed;
-    require(changed > 30, "Native SVG pixels move with beat phase");
+    require(changedPixels(onbeat, offbeat) > 30, "Native SVG pixels move with beat phase");
     host.position.setIsPlaying(false);
     host.position.setPpqPosition(0);
     p.processBlock(clockAudio, clockMidi);
@@ -914,6 +920,18 @@ int main(int argc, char** argv) {
         require(slope->getName(64) == "Slope" && sideOnly->getName(64) == "Side-only split"
                     && sideOnlyButton != nullptr && sideOnlyButton->getButtonText() == "SIDE-ONLY SPLIT",
                 "the host and the editor use one name for each mode");
+    }
+
+    {
+        BassSpaceProcessor field;
+        std::unique_ptr<juce::AudioProcessorEditor> fieldEditor(field.createEditor());
+        auto* anchor = findById(*fieldEditor, "stereoField");
+        require(anchor != nullptr, "stereo field is laid out");
+        const auto wingsArea = anchor->getBounds().withTrimmedBottom(40);
+        const auto monoBass = fieldEditor->createComponentSnapshot(wingsArea);
+        field.setCurrentProgram(3);
+        const auto flat = fieldEditor->createComponentSnapshot(wingsArea);
+        require(changedPixels(monoBass, flat) > 30, "the stereo field draws the bass band, so Flat differs from mono bass");
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString
