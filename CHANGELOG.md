@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.7.1
+
+- **UI & Suite Fixes:** UI polish, unit formatting and typed-value entry, inactive control dimming, per-slot A/B undo, inline preset confirms, peak-hold meters, uniform scaling, and screen-reader titles.
+
 ## v2.7.0 — 2026-11-20
 
 2.7.0 upgrades the mastering bass-shaping DSP and adds crossover slope and elliptical controls:
