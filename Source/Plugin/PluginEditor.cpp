@@ -117,13 +117,27 @@ void FineSlider::mouseDrag(const juce::MouseEvent& e) {
     juce::Slider::mouseDrag(e.withNewPosition(dragPosition_));
 }
 
-// Each arrow-key step is one gesture, so the host and the undo history record it.
+// Arrow keys step 1% of the range, or one interval with Shift. Page Up and Page Down step 10%.
+// Only these keys open a gesture, so other keys reach the editor and the host sees no empty gesture.
 bool FineSlider::keyPressed(const juce::KeyPress& key) {
-    if (key.getModifiers().isAnyModifierKeyDown()) {
+    const auto modifiers = key.getModifiers();
+    const bool arrowUp = key.isKeyCode(juce::KeyPress::upKey) || key.isKeyCode(juce::KeyPress::rightKey);
+    const bool arrowDown = key.isKeyCode(juce::KeyPress::downKey) || key.isKeyCode(juce::KeyPress::leftKey);
+    const bool pageUp = key.isKeyCode(juce::KeyPress::pageUpKey);
+    const bool pageDown = key.isKeyCode(juce::KeyPress::pageDownKey);
+    if (modifiers.isCommandDown() || modifiers.isCtrlDown() || modifiers.isAltDown()
+        || !(arrowUp || arrowDown || pageUp || pageDown)) {
         return false;
     }
+
+    const bool arrow = arrowUp || arrowDown;
+    const double interval = getInterval();
+    const double rangeStep = (getMaximum() - getMinimum()) * (arrow ? 0.01 : 0.1);
+    const double step = arrow && modifiers.isShiftDown() ? interval : rangeStep;
+    const double direction = arrowUp || pageUp ? 1.0 : -1.0;
     const ScopedDragNotification gesture(*this);
-    return juce::Slider::keyPressed(key);
+    setValue(getValue() + direction * step, juce::sendNotificationSync);
+    return true;
 }
 
 BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)

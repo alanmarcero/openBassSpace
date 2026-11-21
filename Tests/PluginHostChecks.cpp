@@ -960,10 +960,29 @@ int main(int argc, char** argv) {
         require(width->getWantsKeyboardFocus() && findById(*entryEditor, "bypassButton")->getWantsKeyboardFocus(),
                 "dials and buttons take keyboard focus");
         const float beforeKey = entry.currentWidth();
-        require(width->keyPressed(juce::KeyPress(juce::KeyPress::upKey)) && entry.currentWidth() > beforeKey,
-                "the up arrow steps a focused dial");
+        require(width->keyPressed(juce::KeyPress(juce::KeyPress::upKey))
+                    && std::abs(entry.currentWidth() - beforeKey - 2.0f) < 0.01f,
+                "the up arrow steps a dial 1% of its range");
         entry.undo();
         require(std::abs(entry.currentWidth() - beforeKey) < 0.01f, "undo reverts one arrow-key step");
+        width->keyPressed(juce::KeyPress(juce::KeyPress::upKey, juce::ModifierKeys::shiftModifier, 0));
+        require(std::abs(entry.currentWidth() - beforeKey - 0.5f) < 0.01f, "Shift with an arrow steps one interval");
+        width->keyPressed(juce::KeyPress(juce::KeyPress::pageUpKey));
+        width->keyPressed(juce::KeyPress(juce::KeyPress::pageDownKey));
+        width->keyPressed(juce::KeyPress(juce::KeyPress::pageUpKey));
+        require(std::abs(entry.currentWidth() - beforeKey - 20.5f) < 0.01f, "Page Up and Page Down step 10% of the range");
+
+        struct GestureCounter final : juce::AudioProcessorParameter::Listener {
+            int gestures = 0;
+            void parameterValueChanged(int, float) override {}
+            void parameterGestureChanged(int, bool) override { ++gestures; }
+        } gestureCounter;
+        auto* widthParameter = entry.parameters.getParameter("width");
+        widthParameter->addListener(&gestureCounter);
+        const bool passedOn = !width->keyPressed(juce::KeyPress('a')) && !width->keyPressed(juce::KeyPress(juce::KeyPress::tabKey))
+                              && !width->keyPressed(juce::KeyPress(juce::KeyPress::spaceKey));
+        widthParameter->removeListener(&gestureCounter);
+        require(passedOn && gestureCounter.gestures == 0, "keys a dial does not use pass on without a gesture");
     }
 
     {
