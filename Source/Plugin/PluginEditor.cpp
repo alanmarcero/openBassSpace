@@ -192,12 +192,15 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     configureModeButton(soloLowButton_, kAccentMint, "Solo bass band",
                         "Auditions only the low-frequency band below the crossover.",
                         "Audition the isolated bass band below the crossover frequency.");
-    configureModeButton(slopeButton_, kAccentGold, "48 dB/oct LR8 crossover",
-                        "Switches crossover slope between 24 dB/oct LR4 and 48 dB/oct LR8.",
-                        "Enable 8th-order 48 dB/oct Linkwitz-Riley sub/mid separation.");
-    configureModeButton(ellipticalButton_, kAccentMint, "Elliptical zero-phase Mid",
-                        "High-passes only the Side channel while keeping Mid 100% phase-linear.",
-                        "Enable mastering Elliptical EQ topology for zero-phase-shift Mid transients.");
+    configureModeButton(slopeButton_, kAccentGold, "Slope",
+                        "Switches the crossover slope between 24 dB and 48 dB per octave.",
+                        "Switch the crossover slope between 24 dB and 48 dB per octave. 48 dB separates the bands more sharply.");
+    configureModeButton(ellipticalButton_, kAccentMint, "Side-only split",
+                        "Splits only the Side at the crossover and passes the Mid unfiltered.",
+                        "Split only the Side at the crossover. The Mid passes unfiltered and keeps its phase "
+                        "while Sub drive and Upper tilt are at 0.");
+    slopeButton_.setComponentID("slopeButton");
+    ellipticalButton_.setComponentID("sideOnlyButton");
 
     for (auto* component : std::initializer_list<juce::Component*>{
              &freqSlider_, &freqLabel_,
@@ -236,6 +239,10 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         processor_.parameters, bass_space::params::kSoloLow, soloLowButton_);
     slopeAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kSlope, slopeButton_);
+    slopeButton_.onStateChange = [this] {
+        slopeButton_.setButtonText("SLOPE " + processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText());
+    };
+    slopeButton_.onStateChange();
     ellipticalAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kElliptical, ellipticalButton_);
 
@@ -455,9 +462,9 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     g.setFont(juce::FontOptions(11.0f));
     g.setColour(kTextDim);
-    const juce::String slopeText = processor_.currentLr8Slope() ? "8th-order Linkwitz-Riley (48 dB)" : "4th-order Linkwitz-Riley";
-    const juce::String topologyText = processor_.currentElliptical() ? "elliptical zero-phase Mid" : "independent bass and upper width";
-    g.drawText(slopeText + "  |  " + topologyText + "  |  Velvet stereoize",
+    const auto slope = processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText();
+    const juce::String split = processor_.currentElliptical() ? "  |  Side-only split" : "";
+    g.drawText("Slope " + slope + split + "  |  Velvet stereoize",
                footerArea_, juce::Justification::centred);
 }
 

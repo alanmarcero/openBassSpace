@@ -898,6 +898,24 @@ int main(int argc, char** argv) {
         require(std::abs(entry.currentWidth() - beforeKey) < 0.01f, "undo reverts one arrow-key step");
     }
 
+    {
+        BassSpaceProcessor modes;
+        std::unique_ptr<juce::AudioProcessorEditor> modesEditor(modes.createEditor());
+        auto* slopeButton = dynamic_cast<juce::Button*>(findById(*modesEditor, "slopeButton"));
+        auto* sideOnlyButton = dynamic_cast<juce::Button*>(findById(*modesEditor, "sideOnlyButton"));
+        auto* slope = modes.parameters.getParameter("slope");
+        auto* sideOnly = modes.parameters.getParameter("elliptical");
+        require(slopeButton != nullptr && slopeButton->getButtonText() == "SLOPE 24 dB",
+                "the slope button names the current 24 dB slope");
+        slopeButton->triggerClick();
+        pump();
+        require(slopeButton->getButtonText() == "SLOPE 48 dB" && slope->getCurrentValueAsText() == "48 dB",
+                "the slope button and the host name the same 48 dB slope");
+        require(slope->getName(64) == "Slope" && sideOnly->getName(64) == "Side-only split"
+                    && sideOnlyButton != nullptr && sideOnlyButton->getButtonText() == "SIDE-ONLY SPLIT",
+                "the host and the editor use one name for each mode");
+    }
+
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;

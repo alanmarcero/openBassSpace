@@ -51,8 +51,8 @@ private:
     FineSlider outputDbSlider_;
     FineSlider upperTiltSlider_;
     juce::TextButton soloLowButton_{"SOLO BASS"};
-    juce::TextButton slopeButton_{"48 dB LR8"};
-    juce::TextButton ellipticalButton_{"ELLIPTICAL"};
+    juce::TextButton slopeButton_{"SLOPE 24 dB"};
+    juce::TextButton ellipticalButton_{"SIDE-ONLY SPLIT"};
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label upperWidthLabel_;
