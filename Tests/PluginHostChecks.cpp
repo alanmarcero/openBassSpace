@@ -104,6 +104,22 @@ static juce::String overlappingChildren(juce::Component& parent) {
     return {};
 }
 
+// Names the first visible button under 36 px tall, or returns an empty string.
+static juce::String shortButton(juce::Component& component) {
+    if (auto* button = dynamic_cast<juce::Button*>(&component); button != nullptr && button->getHeight() < 36) {
+        return button->getButtonText() + " is " + juce::String(button->getHeight()) + " px tall";
+    }
+    for (auto* child : component.getChildren()) {
+        if (!child->isVisible()) {
+            continue;
+        }
+        if (const auto found = shortButton(*child); found.isNotEmpty()) {
+            return found;
+        }
+    }
+    return {};
+}
+
 static int smallestDial(juce::Component& parent) {
     int smallest = std::numeric_limits<int>::max();
     for (auto* child : parent.getChildren()) {
@@ -143,6 +159,8 @@ static void checkLayout(juce::Component& editor, const juce::String& when) {
     const auto overlap = overlappingChildren(editor);
     require(overlap.isEmpty(), (when + ": " + overlap).toRawUTF8());
     require(smallestDial(editor) >= 64, (when + ": every dial is at least 64 px").toRawUTF8());
+    const auto tooShort = shortButton(editor);
+    require(tooShort.isEmpty(), (when + ": " + tooShort).toRawUTF8());
     const auto clearance = [&editor](const juce::String& upperTitle, const juce::String& lowerName) {
         auto* upper = findSlider(editor, upperTitle);
         auto* lower = findLabel(editor, lowerName);
@@ -382,6 +400,13 @@ int main(int argc, char** argv) {
     require(findSlider(*editor, "Upper air tilt") != nullptr, "Upper tilt control has an accessibility title");
     require(findSlider(*editor, "Output level") != nullptr, "Output control has an accessibility title");
     checkLayout(*editor, "default size");
+    presetButton->triggerClick();
+    pump();
+    auto* browser = findById(*editor, "presetBrowser");
+    require(browser != nullptr && browser->isVisible() && shortButton(*browser).isEmpty(),
+            "the open preset browser keeps its buttons at least 36 px tall");
+    presetButton->triggerClick();
+    pump();
 
     struct Host : juce::AudioPlayHead {
         PositionInfo position;

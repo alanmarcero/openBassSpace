@@ -51,7 +51,7 @@ private:
     juce::TextButton save_{"Save"};
     juce::TextButton rename_{"Rename"};
     juce::TextButton remove_{"Delete"};
-    juce::TextButton favorite_{"Fav"};
+    juce::TextButton favorite_{"Favorite"};
 };
 
 // Compact undo, A/B, bypass, and preset controls. Colours match the openBassSpace faceplate.
@@ -74,8 +74,8 @@ private:
     juce::TextButton redoButton_{"Redo"};
     juce::TextButton aButton_{"A"};
     juce::TextButton bButton_{"B"};
-    juce::TextButton copyAtoB_{"A>B"};
-    juce::TextButton copyBtoA_{"B>A"};
+    juce::TextButton copyAtoB_{"Copy A to B"};
+    juce::TextButton copyBtoA_{"Copy B to A"};
     juce::TextButton bypassButton_{"Bypass"};
     juce::TextButton presetButton_{"Presets"};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment_;

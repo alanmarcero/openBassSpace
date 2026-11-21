@@ -34,7 +34,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
 
     list_.setColour(juce::ListBox::backgroundColourId, kBackground);
     list_.setColour(juce::ListBox::outlineColourId, kEdge);
-    list_.setRowHeight(22);
+    list_.setRowHeight(28);
     addAndMakeVisible(list_);
 
     for (auto* button : { &save_, &rename_, &remove_, &favorite_ }) {
@@ -107,9 +107,9 @@ void PresetBrowser::paint(juce::Graphics& g) {
 
 void PresetBrowser::resized() {
     auto area = getLocalBounds().reduced(8);
-    search_.setBounds(area.removeFromTop(24));
+    search_.setBounds(area.removeFromTop(28));
     area.removeFromTop(6);
-    auto buttons = area.removeFromBottom(26);
+    auto buttons = area.removeFromBottom(36);
     const int width = buttons.getWidth() / 4;
     save_.setBounds(buttons.removeFromLeft(width).reduced(2, 0));
     rename_.setBounds(buttons.removeFromLeft(width).reduced(2, 0));
@@ -133,7 +133,7 @@ void PresetBrowser::paintListBoxItem(int row, juce::Graphics& g, int width, int 
         g.fillRect(0, 0, width, height);
     }
     g.setColour(entry.favorite ? kGold : (entry.factory ? kDim : kText));
-    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
     const juce::String prefix = entry.favorite ? juce::String::charToString(0x2605) + " " : juce::String();
     const juce::String suffix = entry.factory ? "  factory" : "";
     g.drawText(prefix + entry.name + suffix, 8, 0, width - 12, height, juce::Justification::centredLeft, true);
@@ -154,7 +154,7 @@ void PresetBrowser::updateButtons() {
     rename_.setEnabled(user && search_.getText().trim().isNotEmpty());
     remove_.setEnabled(user);
     favorite_.setEnabled(entry != nullptr);
-    favorite_.setButtonText(entry != nullptr && entry->favorite ? "Unfav" : "Fav");
+    favorite_.setButtonText(entry != nullptr && entry->favorite ? "Unfavorite" : "Favorite");
     save_.setEnabled(search_.getText().trim().isNotEmpty() && !library_.isFactoryName(search_.getText()));
 }
 
@@ -240,20 +240,20 @@ void SuiteStrip::paint(juce::Graphics& g) {
 }
 
 void SuiteStrip::resized() {
-    auto row = getLocalBounds().reduced(4, 3);
+    auto row = getLocalBounds().reduced(4, 2);
     undoButton_.setBounds(row.removeFromLeft(56));
     row.removeFromLeft(4);
     redoButton_.setBounds(row.removeFromLeft(56));
     row.removeFromLeft(8);
-    aButton_.setBounds(row.removeFromLeft(30));
+    aButton_.setBounds(row.removeFromLeft(40));
     row.removeFromLeft(3);
-    bButton_.setBounds(row.removeFromLeft(30));
+    bButton_.setBounds(row.removeFromLeft(40));
     row.removeFromLeft(4);
-    copyAtoB_.setBounds(row.removeFromLeft(46));
+    copyAtoB_.setBounds(row.removeFromLeft(92));
     row.removeFromLeft(3);
-    copyBtoA_.setBounds(row.removeFromLeft(46));
+    copyBtoA_.setBounds(row.removeFromLeft(92));
     row.removeFromLeft(8);
-    bypassButton_.setBounds(row.removeFromLeft(70));
+    bypassButton_.setBounds(row.removeFromLeft(68));
     row.removeFromLeft(8);
     presetButton_.setBounds(row);
 }

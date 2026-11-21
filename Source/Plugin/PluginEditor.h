@@ -6,6 +6,7 @@
 
 class BassSpaceTheme final : public juce::LookAndFeel_V4 {
 public:
+    juce::Font getTextButtonFont(juce::TextButton&, int) override;
     juce::Label* createSliderTextBox(juce::Slider& slider) override;
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position,
                           float startAngle, float endAngle, juce::Slider& slider) override;

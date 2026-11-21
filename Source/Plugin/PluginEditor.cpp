@@ -18,6 +18,7 @@ const juce::Colour kPanelRule{ 0xff31434d };
 constexpr int kNameHeight = 16;
 constexpr int kValueHeight = 20;
 constexpr int kKnobMargin = 6;
+constexpr int kButtonHeight = 36;
 
 juce::Colour widthColour(float percent) {
     if (percent < 10.0f) {
@@ -75,6 +76,10 @@ void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slide
 }
 
 } // namespace
+
+juce::Font BassSpaceTheme::getTextButtonFont(juce::TextButton&, int) {
+    return withDefaultMetrics(juce::FontOptions(14.0f));
+}
 
 juce::Label* BassSpaceTheme::createSliderTextBox(juce::Slider& slider) {
     auto* box = juce::LookAndFeel_V4::createSliderTextBox(slider);
@@ -363,9 +368,9 @@ void BassSpaceEditor::updateMeter() {
 
 void BassSpaceEditor::positionPresetBrowser() {
     auto anchor = getLocalArea(&suiteStrip_, suiteStrip_.presetButtonBounds());
-    const int browserWidth = juce::jmin(340, getWidth() - 24);
+    const int browserWidth = juce::jmin(400, getWidth() - 24);
     const int x = juce::jlimit(8, juce::jmax(8, getWidth() - browserWidth - 8), anchor.getRight() - browserWidth);
-    const int height = juce::jmin(260, juce::jmax(160, getHeight() - anchor.getBottom() - 16));
+    const int height = juce::jmin(320, juce::jmax(220, getHeight() - anchor.getBottom() - 16));
     presetBrowser_.setBounds(x, anchor.getBottom() + 4, browserWidth, height);
 }
 
@@ -559,7 +564,7 @@ void BassSpaceEditor::resized() {
     headerArea_ = area.removeFromTop(32);
     badgeArea_ = headerArea_.withSizeKeepingCentre(juce::jmin(210, headerArea_.getWidth() / 3), 20);
     area.removeFromTop(6);
-    suiteStrip_.setBounds(area.removeFromTop(34));
+    suiteStrip_.setBounds(area.removeFromTop(44));
     area.removeFromTop(6);
     footerArea_ = area.removeFromBottom(18);
     area.removeFromTop(2);
@@ -599,19 +604,17 @@ void BassSpaceEditor::resized() {
     stereoFieldAnchor_.setBounds(ringArea_);
 
     auto cells = masterArea_.reduced(4, 6);
-    const int cellW = cells.getWidth() / 4;
+    auto buttonColumn = cells.removeFromRight(juce::jmax(148, cells.getWidth() / 4));
+    const int cellW = cells.getWidth() / 3;
     placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_);
     placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_);
-    placeKnob(cells.removeFromLeft(cellW), upperTiltLabel_, upperTiltSlider_);
-    const int buttonWidth = juce::jmin(124, juce::jmax(72, cells.getWidth() - 8));
-    const int buttonHeight = juce::jlimit(24, 30, (cells.getHeight() - 10) / 3);
-    const int totalStackHeight = buttonHeight * 3 + 8;
-    auto buttonColumn = cells.withSizeKeepingCentre(buttonWidth, totalStackHeight);
-    soloLowButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
-    buttonColumn.removeFromTop(4);
-    slopeButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
-    buttonColumn.removeFromTop(4);
-    ellipticalButton_.setBounds(buttonColumn.removeFromTop(buttonHeight));
+    placeKnob(cells, upperTiltLabel_, upperTiltSlider_);
+    buttonColumn = buttonColumn.withSizeKeepingCentre(buttonColumn.getWidth() - 8, kButtonHeight * 3 + 12);
+    soloLowButton_.setBounds(buttonColumn.removeFromTop(kButtonHeight));
+    buttonColumn.removeFromTop(6);
+    slopeButton_.setBounds(buttonColumn.removeFromTop(kButtonHeight));
+    buttonColumn.removeFromTop(6);
+    ellipticalButton_.setBounds(buttonColumn.removeFromTop(kButtonHeight));
 
     if (presetBrowser_.isVisible()) {
         positionPresetBrowser();
