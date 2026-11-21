@@ -257,6 +257,53 @@ TEST_CASE("StereoFieldShaper correlation handles mono, polarity inversion, and s
     REQUIRE_THAT(StereoFieldShaper::correlationCoefficient(0.0, 0.0, 0.0), WithinAbs(0.0, 1e-12));
 }
 
+TEST_CASE("Correlation meter reads silence as no value", "[stereo][meter]") {
+    CorrelationMeter meter;
+    meter.prepare(48000.0);
+    for (int i = 0; i < 4800; ++i) {
+        meter.process(0.0f, 0.0f);
+    }
+    REQUIRE(std::isnan(meter.fullBand()));
+    REQUIRE(std::isnan(meter.lowBand()));
+}
+
+TEST_CASE("Correlation meter confirms mono bass under an out-of-phase top", "[stereo][meter]") {
+    const double fs = 48000.0;
+    CorrelationMeter meter;
+    meter.prepare(fs);
+    meter.setCrossover(120.0, CrossoverSlope::LR4_24dB);
+    for (int i = 0; i < 48000; ++i) {
+        const double t = static_cast<double>(i) / fs;
+        const auto bass = static_cast<float>(0.5 * std::sin(2.0 * std::numbers::pi * 60.0 * t));
+        const auto top = static_cast<float>(0.7 * std::sin(2.0 * std::numbers::pi * 3000.0 * t));
+        meter.process(bass + top, bass - top);
+    }
+    REQUIRE(meter.fullBand() < -0.2f);
+    REQUIRE(meter.lowBand() > 0.98f);
+}
+
+TEST_CASE("Correlation meter smooths over a few hundred milliseconds and then reads silence", "[stereo][meter]") {
+    const double fs = 48000.0;
+    CorrelationMeter meter;
+    meter.prepare(fs);
+    const auto run = [&meter, fs](double seconds, float level, float rightSign) {
+        for (int i = 0; i < static_cast<int>(seconds * fs); ++i) {
+            const auto tone = static_cast<float>(level * std::sin(2.0 * std::numbers::pi * 1000.0 * i / fs));
+            meter.process(tone, rightSign * tone);
+        }
+    };
+    run(1.0, 0.5f, 1.0f);
+    REQUIRE(meter.fullBand() > 0.99f);
+    run(0.05, 0.5f, -1.0f);
+    REQUIRE(meter.fullBand() > 0.5f);
+    run(1.5, 0.5f, -1.0f);
+    REQUIRE(meter.fullBand() < -0.95f);
+    run(0.1, 0.0f, 1.0f);
+    REQUIRE_FALSE(std::isnan(meter.fullBand()));
+    run(0.9, 0.0f, 1.0f);
+    REQUIRE(std::isnan(meter.fullBand()));
+}
+
 namespace {
 
 double measureToneMagnitude(const float* samples, int startSample, int count, double freqHz, double sampleRate) {

@@ -141,4 +141,35 @@ private:
     StereoCeilingGuard ceilingGuard_{};
 };
 
+// Phase correlation over about 300 ms, for the whole band and for the band below the crossover.
+// A reading is NaN while its band is below -60 dBFS.
+class CorrelationMeter {
+public:
+    void prepare(double sampleRate) noexcept;
+    void reset() noexcept;
+    void setCrossover(double frequencyHz, CrossoverSlope slope) noexcept;
+    void process(float left, float right) noexcept;
+
+    [[nodiscard]] float fullBand() const noexcept { return full_.reading(); }
+    [[nodiscard]] float lowBand() const noexcept { return low_.reading(); }
+
+private:
+    struct Moments {
+        double cross = 0.0;
+        double left = 0.0;
+        double right = 0.0;
+        double power = 0.0;
+
+        void update(float leftSample, float rightSample, double smoothing, double powerSmoothing) noexcept;
+        [[nodiscard]] float reading() const noexcept;
+    };
+
+    Moments full_;
+    Moments low_;
+    LinkwitzRiley4 lowLeft_;
+    LinkwitzRiley4 lowRight_;
+    double smoothing_ = 0.0;
+    double powerSmoothing_ = 0.0;
+};
+
 } // namespace analog_master::core

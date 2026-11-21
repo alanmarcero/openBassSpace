@@ -1,6 +1,7 @@
 #include "StereoFieldShaper.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 namespace analog_master::core {
@@ -12,6 +13,10 @@ constexpr double kDefaultSampleRate = 44100.0;
 constexpr float kCeilingLinear = 0.98855309f; // -0.10 dBFS
 constexpr std::array<double, 4> kDiffuserDelaySeconds { 0.0011, 0.0023, 0.0037, 0.0053 };
 constexpr std::array<float, 4> kDiffuserGains { 0.62f, -0.58f, 0.55f, -0.52f };
+constexpr double kCorrelationSeconds = 0.3;
+// Silence uses a faster follower, so the meter shows it within 0.7 s after the audio stops.
+constexpr double kSilenceSeconds = 0.05;
+constexpr double kSilentPower = 2.0e-6;
 
 float softCeilingBounded(float x, float ceiling) noexcept {
     const float knee = ceiling * 0.972f;
@@ -86,6 +91,50 @@ void StereoCeilingGuard::process(float& left, float& right) noexcept {
 
     left = softCeilingBounded(left * limiterGain_, kCeilingLinear);
     right = softCeilingBounded(right * limiterGain_, kCeilingLinear);
+}
+
+void CorrelationMeter::prepare(double sampleRate) noexcept {
+    const double validRate = sampleRate >= kMinSampleRate ? sampleRate : kDefaultSampleRate;
+    smoothing_ = 1.0 - std::exp(-1.0 / (kCorrelationSeconds * validRate));
+    powerSmoothing_ = 1.0 - std::exp(-1.0 / (kSilenceSeconds * validRate));
+    lowLeft_.prepare(validRate);
+    lowRight_.prepare(validRate);
+    reset();
+}
+
+void CorrelationMeter::reset() noexcept {
+    full_ = {};
+    low_ = {};
+    lowLeft_.reset();
+    lowRight_.reset();
+}
+
+void CorrelationMeter::setCrossover(double frequencyHz, CrossoverSlope slope) noexcept {
+    lowLeft_.setCrossoverFrequency(frequencyHz);
+    lowRight_.setCrossoverFrequency(frequencyHz);
+    lowLeft_.setSlope(slope);
+    lowRight_.setSlope(slope);
+}
+
+void CorrelationMeter::process(float left, float right) noexcept {
+    full_.update(left, right, smoothing_, powerSmoothing_);
+    low_.update(lowLeft_.process(left).low, lowRight_.process(right).low, smoothing_, powerSmoothing_);
+}
+
+void CorrelationMeter::Moments::update(float leftSample, float rightSample, double smoothing, double powerSmoothing) noexcept {
+    const double l = leftSample;
+    const double r = rightSample;
+    cross += smoothing * (l * r - cross);
+    left += smoothing * (l * l - left);
+    right += smoothing * (r * r - right);
+    power += powerSmoothing * (l * l + r * r - power);
+}
+
+float CorrelationMeter::Moments::reading() const noexcept {
+    if (power < kSilentPower) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(StereoFieldShaper::correlationCoefficient(cross, left, right));
 }
 
 StereoFieldShaper::StereoFieldShaper() {

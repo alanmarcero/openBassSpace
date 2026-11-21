@@ -7,6 +7,7 @@
 #include "SuiteHistory.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
+#include <limits>
 
 class BassSpaceProcessor final : public juce::AudioProcessor {
 public:
@@ -85,8 +86,13 @@ public:
         return ellipticalParam_ != nullptr && ellipticalParam_->load(std::memory_order_relaxed) >= 0.5f;
     }
 
+    // Both readings are NaN while their band is silent.
     [[nodiscard]] float currentCorrelation() const noexcept {
         return correlation_.load(std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] float currentBassCorrelation() const noexcept {
+        return bassCorrelation_.load(std::memory_order_relaxed);
     }
 
     float artworkPhase() const noexcept { return artworkClock_.currentPhase(); }
@@ -133,7 +139,9 @@ private:
     std::atomic<float>* ellipticalParam_ = nullptr;
     ArtworkBeatClock artworkClock_;
     double processingRate_ = 48000.0;
-    std::atomic<float> correlation_ {0.0f};
+    std::atomic<float> correlation_ {std::numeric_limits<float>::quiet_NaN()};
+    std::atomic<float> bassCorrelation_ {std::numeric_limits<float>::quiet_NaN()};
+    analog_master::core::CorrelationMeter correlationMeter_;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outputGain_;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassMix_;
     juce::AudioBuffer<float> dryBuffer_;

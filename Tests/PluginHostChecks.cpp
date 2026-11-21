@@ -334,9 +334,9 @@ int main(int argc, char** argv) {
     require(editor->getConstrainer() != nullptr && editor->getConstrainer()->getFixedAspectRatio() == 0.0,
             "editor has no fixed aspect ratio");
     auto* correlationReadout = dynamic_cast<juce::Label*>(findById(*editor, "correlationValue"));
-    require(correlationReadout != nullptr && correlationReadout->getFont().getHeight() >= 24.0f
-                && correlationReadout->getHeight() >= 32,
-            "correlation readout stays large");
+    require(correlationReadout != nullptr && correlationReadout->getText() == "--"
+                && correlationReadout->getFont().getHeight() <= 20.0f,
+            "silence reads as -- in compact digits");
     require(findById(*editor, "undoButton") != nullptr, "undo button is visible");
     require(findById(*editor, "redoButton") != nullptr, "redo button is visible");
     require(findById(*editor, "compareA") != nullptr && findById(*editor, "compareB") != nullptr,
@@ -492,6 +492,23 @@ int main(int argc, char** argv) {
     pump();
     require(hasVisibleLabel(*correlationEditor, "-1.00"),
             "Correlation meter reports an out-of-phase stereo signal");
+    auto* fullReadout = dynamic_cast<juce::Label*>(findById(*correlationEditor, "correlationValue"));
+    auto* bassReadout = dynamic_cast<juce::Label*>(findById(*correlationEditor, "bassCorrelationValue"));
+    require(bassReadout != nullptr && bassReadout->getText() == "--", "the bass band reads -- when it carries no signal");
+    const auto belowZeroColour = fullReadout->findColour(juce::Label::textColourId);
+    correlationEditor.reset();
+    for (int block = 0; block < 150; ++block) {
+        for (int sample = 0; sample < antiPhaseAudio.getNumSamples(); ++sample) {
+            const float value = 0.5f * std::sin(2.0f * 3.14159265f * 5000.0f * static_cast<float>(sample) / 48000.0f);
+            antiPhaseAudio.setSample(0, sample, value);
+            antiPhaseAudio.setSample(1, sample, value);
+        }
+        correlationProcessor.processBlock(antiPhaseAudio, correlationMidi);
+    }
+    correlationEditor.reset(correlationProcessor.createEditor());
+    fullReadout = dynamic_cast<juce::Label*>(findById(*correlationEditor, "correlationValue"));
+    require(fullReadout->getText() == "+1.00" && fullReadout->findColour(juce::Label::textColourId) != belowZeroColour,
+            "an in-phase reading changes the readout colour away from the below-zero amber");
 
     // Audio test: Verify mono input processing (DAW mono track)
     juce::AudioBuffer<float> monoAudio(1, 256);
@@ -634,9 +651,6 @@ int main(int argc, char** argv) {
     checkLayout(*editor, "minimum size");
     editor->setSize(980, 700);
     require(editor->getWidth() == 980 && editor->getHeight() == 700, "editor accepts a free resize");
-    auto* resizedReadout = dynamic_cast<juce::Label*>(findById(*editor, "correlationValue"));
-    require(resizedReadout != nullptr && resizedReadout->getFont().getHeight() >= 24.0f,
-            "correlation readout stays large when resized");
 
     {
         BassSpaceProcessor suite;

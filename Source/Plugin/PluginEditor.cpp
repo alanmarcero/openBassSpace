@@ -176,13 +176,17 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     configureName(stereoizeLabel_, "Stereoize");
 
     correlationLabel_.setText("Correlation", juce::dontSendNotification);
-    correlationLabel_.setJustificationType(juce::Justification::centredLeft);
-    correlationLabel_.setFont(juce::FontOptions(13.0f, juce::Font::bold));
-    correlationLabel_.setColour(juce::Label::textColourId, kTextDim);
     correlationValueLabel_.setComponentID("correlationValue");
-    correlationValueLabel_.setJustificationType(juce::Justification::centredRight);
-    correlationValueLabel_.setFont(juce::FontOptions(28.0f, juce::Font::bold));
-    correlationValueLabel_.setColour(juce::Label::textColourId, kAccentMint);
+    bassCorrelationValueLabel_.setComponentID("bassCorrelationValue");
+    for (auto* name : { &correlationLabel_, &bassCorrelationLabel_ }) {
+        name->setJustificationType(juce::Justification::centredLeft);
+        name->setFont(juce::FontOptions(13.0f, juce::Font::bold));
+        name->setColour(juce::Label::textColourId, kTextDim);
+    }
+    for (auto* value : { &correlationValueLabel_, &bassCorrelationValueLabel_ }) {
+        value->setJustificationType(juce::Justification::centredRight);
+        value->setFont(juce::FontOptions(18.0f, juce::Font::bold));
+    }
 
     configureKnob(outputDbSlider_, kAccentMint, 0.0, "Output level",
                   "Sets the plug-in output level in decibels.",
@@ -217,7 +221,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
              &widthSlider_, &widthLabel_,
              &upperWidthSlider_, &upperWidthLabel_,
              &stereoizeSlider_, &stereoizeLabel_,
-             &correlationLabel_, &correlationValueLabel_,
+             &correlationLabel_, &correlationValueLabel_, &bassCorrelationLabel_, &bassCorrelationValueLabel_,
              &outputDbSlider_, &outputDbLabel_,
              &subDriveSlider_, &subDriveLabel_,
              &upperTiltSlider_, &upperTiltLabel_,
@@ -284,7 +288,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     setResizable(true, true);
     setResizeLimits(BassSpaceProcessor::minEditorWidth, BassSpaceProcessor::minEditorHeight, 1800, 1400);
     setSize(savedWidth, savedHeight);
-    updateValueLabels();
+    updateMeter();
     startTimerHz(30);
 }
 
@@ -319,15 +323,38 @@ bool BassSpaceEditor::keyPressed(const juce::KeyPress& key) {
 }
 
 void BassSpaceEditor::timerCallback() {
-    updateValueLabels();
+    updateMeter();
     suiteStrip_.refresh();
     if (!ringArea_.isEmpty()) {
-        repaint(ringArea_.getUnion(correlationTrack_.getSmallestIntegerContainer()).getUnion(footerArea_));
+        repaint(ringArea_.getUnion(meterArea_).getUnion(footerArea_));
     }
 }
 
-void BassSpaceEditor::updateValueLabels() {
-    correlationValueLabel_.setText(juce::String(processor_.currentCorrelation(), 2), juce::dontSendNotification);
+void BassSpaceEditor::updateMeter() {
+    const std::array<float, 2> readings { processor_.currentCorrelation(), processor_.currentBassCorrelation() };
+    const std::array<juce::Label*, 2> values { &correlationValueLabel_, &bassCorrelationValueLabel_ };
+    for (size_t row = 0; row < values.size(); ++row) {
+        const float hundredths = std::round(readings[row] * 100.0f) / 100.0f;
+        const auto text = [hundredths]() -> juce::String {
+            if (std::isnan(hundredths)) {
+                return "--";
+            }
+            if (std::abs(hundredths) < 0.005f) {
+                return "0.00";
+            }
+            return (hundredths > 0.0f ? "+" : "") + juce::String(hundredths, 2);
+        }();
+        const auto colour = [hundredths] {
+            if (std::isnan(hundredths)) {
+                return kTextDim;
+            }
+            return hundredths < -0.005f ? kAccentGold : kAccentMint;
+        }();
+        values[row]->setText(text, juce::dontSendNotification);
+        values[row]->setColour(juce::Label::textColourId, colour);
+    }
+    const auto crossover = processor_.parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText();
+    bassCorrelationLabel_.setText("Below " + crossover, juce::dontSendNotification);
 }
 
 void BassSpaceEditor::positionPresetBrowser() {
@@ -460,16 +487,30 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     caption.append(upperCaption, captionFont, widthColour(upperWidth).withAlpha(soloBass ? 0.6f : 1.0f));
     caption.draw(g, ringArea_.toFloat().removeFromBottom(16.0f));
 
-    const float correlation = juce::jlimit(-1.0f, 1.0f, processor_.currentCorrelation());
-    g.setColour(kPanelEdge);
-    g.fillRoundedRectangle(correlationTrack_, 3.0f);
-    g.setColour(correlation < 0.0f ? kAccentGold : kAccentMint);
-    const float correlationEnd = correlationTrack_.getCentreX() + correlation * correlationTrack_.getWidth() * 0.5f;
-    g.fillRoundedRectangle(juce::Rectangle<float>(std::min(correlationTrack_.getCentreX(), correlationEnd),
-                                                  correlationTrack_.getY(),
-                                                  std::abs(correlationEnd - correlationTrack_.getCentreX()),
-                                                  correlationTrack_.getHeight()),
-                           3.0f);
+    const std::array<float, 2> readings { processor_.currentCorrelation(), processor_.currentBassCorrelation() };
+    for (size_t row = 0; row < correlationTracks_.size(); ++row) {
+        const auto& track = correlationTracks_[row];
+        g.setColour(kPanelEdge);
+        g.fillRoundedRectangle(track, 3.0f);
+        if (!std::isnan(readings[row])) {
+            const float reading = juce::jlimit(-1.0f, 1.0f, readings[row]);
+            const float end = track.getCentreX() + reading * track.getWidth() * 0.5f;
+            g.setColour(reading < 0.0f ? kAccentGold : kAccentMint);
+            g.fillRoundedRectangle(track.withX(std::min(track.getCentreX(), end)).withWidth(std::abs(end - track.getCentreX())),
+                                   3.0f);
+        }
+        g.setColour(kTextDim);
+        for (const float mark : { -1.0f, 0.0f, 1.0f }) {
+            g.fillRect(juce::Rectangle<float>(1.0f, track.getHeight() + 6.0f)
+                           .withCentre({ track.getCentreX() + mark * track.getWidth() * 0.5f, track.getCentreY() }));
+        }
+    }
+    const auto& lowerTrack = correlationTracks_[1];
+    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    for (const auto& [mark, text] : { std::pair{ -1.0f, "-1" }, std::pair{ 0.0f, "0" }, std::pair{ 1.0f, "+1" } }) {
+        const juce::Point<float> under(lowerTrack.getCentreX() + mark * lowerTrack.getWidth() * 0.5f, lowerTrack.getBottom() + 12.0f);
+        g.drawText(text, juce::Rectangle<float>(24.0f, 12.0f).withCentre(under), juce::Justification::centred);
+    }
 
     if (!masterArea_.isEmpty()) {
         const auto masterStrip = masterArea_.toFloat();
@@ -529,16 +570,16 @@ void BassSpaceEditor::resized() {
     fieldArea_ = center;
 
     auto field = fieldArea_;
-    auto correlationRow = field.removeFromBottom(juce::jmax(52, fieldArea_.getHeight() / 5));
-    correlationTrack_ = juce::Rectangle<float>(static_cast<float>(fieldArea_.getX() + 18),
-                                               static_cast<float>(correlationRow.getY() + 2),
-                                               static_cast<float>(juce::jmax(40, fieldArea_.getWidth() - 36)),
-                                               8.0f);
-    auto textRow = correlationRow.withTrimmedTop(12);
-    correlationLabel_.setBounds(textRow.removeFromLeft(juce::jmax(108, textRow.getWidth() / 3)));
-    correlationValueLabel_.setBounds(textRow);
-    const float readout = juce::jlimit(26.0f, 52.0f, static_cast<float>(correlationValueLabel_.getHeight()) - 4.0f);
-    correlationValueLabel_.setFont(juce::FontOptions(readout, juce::Font::bold));
+    meterArea_ = field.removeFromBottom(72).reduced(12, 6);
+    auto meter = meterArea_;
+    const auto placeMeterRow = [&meter](juce::Label& name, juce::Label& value) {
+        auto row = meter.removeFromTop(22);
+        name.setBounds(row.removeFromLeft(104));
+        value.setBounds(row.removeFromRight(60));
+        return row.reduced(10, 7).toFloat();
+    };
+    correlationTracks_ = { placeMeterRow(correlationLabel_, correlationValueLabel_),
+                           placeMeterRow(bassCorrelationLabel_, bassCorrelationValueLabel_) };
 
     field.removeFromBottom(6);
     ringArea_ = field.reduced(4, 2);
@@ -562,5 +603,4 @@ void BassSpaceEditor::resized() {
     if (presetBrowser_.isVisible()) {
         positionPresetBrowser();
     }
-    updateValueLabels();
 }

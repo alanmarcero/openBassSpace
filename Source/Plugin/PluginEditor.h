@@ -37,7 +37,7 @@ public:
 
 private:
     void timerCallback() override;
-    void updateValueLabels();
+    void updateMeter();
     void positionPresetBrowser();
 
     BassSpaceProcessor& processor_;
@@ -61,6 +61,8 @@ private:
     juce::Label upperTiltLabel_;
     juce::Label correlationLabel_;
     juce::Label correlationValueLabel_;
+    juce::Label bassCorrelationLabel_;
+    juce::Label bassCorrelationValueLabel_;
     juce::Label outputDbLabel_;
 
     alanmarcero::suite::SuiteStrip suiteStrip_;
@@ -87,7 +89,8 @@ private:
     juce::Rectangle<int> fieldArea_;
     juce::Rectangle<int> ringArea_;
     juce::Rectangle<int> masterArea_;
-    juce::Rectangle<float> correlationTrack_;
+    juce::Rectangle<int> meterArea_;
+    std::array<juce::Rectangle<float>, 2> correlationTracks_;
     std::array<juce::Line<float>, 2> knobDividers_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceEditor)
