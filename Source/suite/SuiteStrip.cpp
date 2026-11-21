@@ -209,6 +209,7 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     copyBtoA_.onClick = [this] { if (actions_.copyBtoA) actions_.copyBtoA(); refresh(); };
     presetButton_.onClick = [this] { if (actions_.togglePresetBrowser) actions_.togglePresetBrowser(); };
 
+    bypassButton_.setClickingTogglesState(true);
     bypassAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         state, bypassParameterId, bypassButton_);
     refresh();

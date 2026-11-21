@@ -721,6 +721,19 @@ int main(int argc, char** argv) {
                 "leaving bypass does not jump");
     }
 
+    {
+        BassSpaceProcessor clicked;
+        std::unique_ptr<juce::AudioProcessorEditor> clickedEditor(clicked.createEditor());
+        auto* bypassButton = dynamic_cast<juce::Button*>(findById(*clickedEditor, "bypassButton"));
+        require(bypassButton != nullptr && !clicked.currentBypass(), "bypass starts off");
+        bypassButton->triggerClick();
+        pump();
+        require(clicked.currentBypass(), "clicking Bypass bypasses the plug-in");
+        bypassButton->triggerClick();
+        pump();
+        require(!clicked.currentBypass(), "a second Bypass click turns bypass off");
+    }
+
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;
