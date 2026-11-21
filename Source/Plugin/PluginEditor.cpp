@@ -34,7 +34,7 @@ void drawGlow(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour col
 void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickValue,
                    const juce::String& title, const juce::String& description, const juce::String& tooltip) {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 96, kValueHeight);
+    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 96, kValueHeight);
     slider.setColour(juce::Slider::textBoxTextColourId, fill);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
@@ -45,7 +45,8 @@ void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickVa
     slider.setTitle(title);
     slider.setDescription(description);
     slider.setTooltip(tooltip);
-    slider.setWantsKeyboardFocus(false);
+    slider.setWantsKeyboardFocus(true);
+    slider.setMouseClickGrabsKeyboardFocus(false);
 }
 
 void configureName(juce::Label& label, const juce::String& text) {
@@ -65,7 +66,7 @@ void configureModeButton(juce::TextButton& button, juce::Colour activeColour,
     button.setTitle(title);
     button.setDescription(description);
     button.setTooltip(tooltip);
-    button.setWantsKeyboardFocus(false);
+    button.setMouseClickGrabsKeyboardFocus(false);
 }
 
 void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slider) {
@@ -80,7 +81,50 @@ void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slide
 juce::Label* BassSpaceTheme::createSliderTextBox(juce::Slider& slider) {
     auto* box = juce::LookAndFeel_V4::createSliderTextBox(slider);
     box->setFont(juce::FontOptions(15.0f, juce::Font::bold));
+    box->setColour(juce::TextEditor::backgroundColourId, kBackground);
+    box->setColour(juce::TextEditor::focusedOutlineColourId, kAccentMint);
     return box;
+}
+
+void BassSpaceTheme::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position,
+                                      float startAngle, float endAngle, juce::Slider& slider) {
+    juce::LookAndFeel_V4::drawRotarySlider(g, x, y, width, height, position, startAngle, endAngle, slider);
+    if (slider.hasKeyboardFocus(false)) {
+        g.setColour(kAccentMint);
+        g.drawRoundedRectangle(juce::Rectangle<int>(x, y, width, height).toFloat().reduced(1.0f), 6.0f, 1.5f);
+    }
+}
+
+void BassSpaceTheme::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& background,
+                                          bool highlighted, bool down) {
+    juce::LookAndFeel_V4::drawButtonBackground(g, button, background, highlighted, down);
+    if (button.hasKeyboardFocus(false)) {
+        g.setColour(kAccentMint);
+        g.drawRoundedRectangle(button.getLocalBounds().toFloat().reduced(1.5f), 6.0f, 2.0f);
+    }
+}
+
+void FineSlider::mouseDown(const juce::MouseEvent& e) {
+    lastMouse_ = e.position;
+    dragPosition_ = e.position;
+    juce::Slider::mouseDown(e);
+}
+
+// Shift scales each mouse step, so pressing or releasing Shift mid-drag does not jump the value.
+void FineSlider::mouseDrag(const juce::MouseEvent& e) {
+    const float speed = e.mods.isShiftDown() ? 0.1f : 1.0f;
+    dragPosition_ += (e.position - lastMouse_) * speed;
+    lastMouse_ = e.position;
+    juce::Slider::mouseDrag(e.withNewPosition(dragPosition_));
+}
+
+// Each arrow-key step is one gesture, so the host and the undo history record it.
+bool FineSlider::keyPressed(const juce::KeyPress& key) {
+    if (key.getModifiers().isAnyModifierKeyDown()) {
+        return false;
+    }
+    const ScopedDragNotification gesture(*this);
+    return juce::Slider::keyPressed(key);
 }
 
 BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)

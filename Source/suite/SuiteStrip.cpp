@@ -42,6 +42,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         button->setColour(juce::TextButton::buttonOnColourId, kMint);
         button->setColour(juce::TextButton::textColourOffId, kText);
         button->setColour(juce::TextButton::textColourOnId, kBackground);
+        button->setMouseClickGrabsKeyboardFocus(false);
         addAndMakeVisible(button);
     }
 
@@ -179,7 +180,7 @@ const PresetEntry* PresetBrowser::selected() const {
 SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::String& bypassParameterId) {
     for (auto* button : { &undoButton_, &redoButton_, &aButton_, &bButton_, &copyAtoB_, &copyBtoA_,
                           &bypassButton_, &presetButton_ }) {
-        button->setWantsKeyboardFocus(false);
+        button->setMouseClickGrabsKeyboardFocus(false);
         addAndMakeVisible(button);
     }
 

@@ -7,6 +7,23 @@
 class BassSpaceTheme final : public juce::LookAndFeel_V4 {
 public:
     juce::Label* createSliderTextBox(juce::Slider& slider) override;
+    void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position,
+                          float startAngle, float endAngle, juce::Slider& slider) override;
+    void drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& background,
+                              bool highlighted, bool down) override;
+};
+
+class FineSlider final : public juce::Slider {
+public:
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    bool keyPressed(const juce::KeyPress& key) override;
+    void focusGained(FocusChangeType) override { repaint(); }
+    void focusLost(FocusChangeType) override { repaint(); }
+
+private:
+    juce::Point<float> lastMouse_;
+    juce::Point<float> dragPosition_;
 };
 
 class BassSpaceEditor final : public juce::AudioProcessorEditor, private juce::Timer {
@@ -26,13 +43,13 @@ private:
     BassSpaceProcessor& processor_;
     BassSpaceTheme theme_;
     juce::TooltipWindow tooltips_ {this, 600};
-    juce::Slider freqSlider_;
-    juce::Slider widthSlider_;
-    juce::Slider upperWidthSlider_;
-    juce::Slider stereoizeSlider_;
-    juce::Slider subDriveSlider_;
-    juce::Slider outputDbSlider_;
-    juce::Slider upperTiltSlider_;
+    FineSlider freqSlider_;
+    FineSlider widthSlider_;
+    FineSlider upperWidthSlider_;
+    FineSlider stereoizeSlider_;
+    FineSlider subDriveSlider_;
+    FineSlider outputDbSlider_;
+    FineSlider upperTiltSlider_;
     juce::TextButton soloLowButton_{"SOLO BASS"};
     juce::TextButton slopeButton_{"48 dB LR8"};
     juce::TextButton ellipticalButton_{"ELLIPTICAL"};

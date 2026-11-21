@@ -73,13 +73,13 @@ static juce::Slider* findSlider(juce::Component& component, const juce::String& 
     return dynamic_cast<juce::Slider*>(*found);
 }
 
-static juce::Rectangle<int> valueBoxIn(juce::Component& editor, juce::Slider& slider) {
+static juce::Label* valueBoxOf(juce::Slider& slider) {
     const auto& parts = slider.getChildren();
     const auto box = std::find_if(parts.begin(), parts.end(), [](auto* part) {
         return dynamic_cast<juce::Label*>(part) != nullptr;
     });
     require(box != parts.end(), "slider shows its value box");
-    return editor.getLocalArea(&slider, (*box)->getBounds());
+    return dynamic_cast<juce::Label*>(*box);
 }
 
 // Names the first two visible children whose bounds overlap, or returns an empty string.
@@ -121,7 +121,7 @@ static void checkLayout(juce::Component& editor, const juce::String& when) {
         auto* upper = findSlider(editor, upperTitle);
         auto* lower = findLabel(editor, lowerName);
         require(upper != nullptr && lower != nullptr, "stacked knobs exist");
-        return lower->getY() - valueBoxIn(editor, *upper).getBottom();
+        return lower->getY() - editor.getLocalArea(upper, valueBoxOf(*upper)->getBounds()).getBottom();
     };
     require(clearance("Crossover frequency", "Stereoize") >= 12 && clearance("Bass stereo width", "Upper width") >= 12,
             (when + ": each stacked value sits clear of the next knob's name").toRawUTF8());
@@ -846,6 +846,56 @@ int main(int argc, char** argv) {
         bypassButton->triggerClick();
         pump();
         require(!clicked.currentBypass(), "a second Bypass click turns bypass off");
+    }
+
+    {
+        BassSpaceProcessor entry;
+        std::unique_ptr<juce::AudioProcessorEditor> entryEditor(entry.createEditor());
+        auto* crossover = findSlider(*entryEditor, "Crossover frequency");
+        auto* width = findSlider(*entryEditor, "Bass stereo width");
+        require(crossover != nullptr && width != nullptr, "dials for typed entry exist");
+
+        const auto type = [](juce::Slider& slider, const juce::String& text) {
+            auto* box = valueBoxOf(slider);
+            require(box->isEditableOnSingleClick(), "a single click opens a value for typing");
+            box->showEditor();
+            require(box->getCurrentTextEditor() != nullptr, "clicking a value opens a text field");
+            box->getCurrentTextEditor()->setText(text, false);
+            box->hideEditor(false);
+        };
+        type(*crossover, "80");
+        require(std::abs(entry.currentFrequency() - 80.0f) < 0.01f, "typing 80 sets the crossover to 80 Hz");
+        type(*crossover, "0.2 kHz");
+        require(std::abs(entry.currentFrequency() - 200.0f) < 0.01f, "typing 0.2 kHz sets the crossover to 200 Hz");
+        entry.undo();
+        require(std::abs(entry.currentFrequency() - 80.0f) < 0.01f, "undo reverts one typed value");
+
+        const auto dragUp = [](juce::Slider& slider, float pixels, juce::ModifierKeys modifiers) {
+            const auto source = juce::Desktop::getInstance().getMainMouseSource();
+            const auto now = juce::Time::getCurrentTime();
+            const juce::Point<float> start(20.0f, 20.0f);
+            const auto event = [&](juce::Point<float> at) {
+                return juce::MouseEvent(source, at, modifiers, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                        &slider, &slider, now, start, now, 1, true);
+            };
+            const double before = slider.valueToProportionOfLength(slider.getValue());
+            slider.mouseDown(event(start));
+            slider.mouseDrag(event(start.translated(0.0f, -pixels)));
+            slider.mouseUp(event(start.translated(0.0f, -pixels)));
+            return slider.valueToProportionOfLength(slider.getValue()) - before;
+        };
+        const juce::ModifierKeys leftButton(juce::ModifierKeys::leftButtonModifier);
+        const double normalDrag = dragUp(*width, 40.0f, leftButton);
+        const double fineDrag = dragUp(*width, 40.0f, leftButton.withFlags(juce::ModifierKeys::shiftModifier));
+        require(normalDrag > 0.1 && std::abs(fineDrag / normalDrag - 0.1) < 0.02, "Shift-drag moves a tenth as far");
+
+        require(width->getWantsKeyboardFocus() && findById(*entryEditor, "bypassButton")->getWantsKeyboardFocus(),
+                "dials and buttons take keyboard focus");
+        const float beforeKey = entry.currentWidth();
+        require(width->keyPressed(juce::KeyPress(juce::KeyPress::upKey)) && entry.currentWidth() > beforeKey,
+                "the up arrow steps a focused dial");
+        entry.undo();
+        require(std::abs(entry.currentWidth() - beforeKey) < 0.01f, "undo reverts one arrow-key step");
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString
