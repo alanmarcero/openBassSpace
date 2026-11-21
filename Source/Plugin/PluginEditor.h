@@ -19,6 +19,7 @@ public:
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     bool keyPressed(const juce::KeyPress& key) override;
+    void setTooltip(const juce::String& newTooltip) override;
     void focusGained(FocusChangeType) override { repaint(); }
     void focusLost(FocusChangeType) override { repaint(); }
 

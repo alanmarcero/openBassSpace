@@ -1254,11 +1254,13 @@ int main(int argc, char** argv) {
         soloing.parameters.getParameter("solo_low")->setValueNotifyingHost(1.0f);
         soloEditor.refreshDisplay();
         require(std::abs(upper->getAlpha() - 0.4f) < 0.01f && upper->isEnabled()
-                    && upper->getTooltip().contains("Turn off Solo bass") && std::abs(crossover->getAlpha() - 1.0f) < 0.01f,
+                    && upper->getTooltip().contains("Turn off Solo bass") && valueBoxOf(*upper)->getTooltip().contains("Turn off Solo bass")
+                    && std::abs(crossover->getAlpha() - 1.0f) < 0.01f,
                 "with Solo bass on, the upper-band dials draw dim, stay editable and say how to hear them");
         soloing.parameters.getParameter("solo_low")->setValueNotifyingHost(0.0f);
         soloEditor.refreshDisplay();
-        require(std::abs(upper->getAlpha() - 1.0f) < 0.01f && !upper->getTooltip().contains("Solo bass"),
+        require(std::abs(upper->getAlpha() - 1.0f) < 0.01f && !upper->getTooltip().contains("Solo bass")
+                    && !valueBoxOf(*upper)->getTooltip().contains("Solo bass"),
                 "turning Solo bass off brings the upper-band dials back");
     }
 

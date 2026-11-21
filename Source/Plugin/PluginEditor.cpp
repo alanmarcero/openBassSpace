@@ -140,6 +140,16 @@ bool FineSlider::keyPressed(const juce::KeyPress& key) {
     return true;
 }
 
+// The value box copies the tooltip only when it is created, so later tooltips go to it too.
+void FineSlider::setTooltip(const juce::String& newTooltip) {
+    juce::Slider::setTooltip(newTooltip);
+    for (auto* child : getChildren()) {
+        if (auto* valueBox = dynamic_cast<juce::Label*>(child)) {
+            valueBox->setTooltip(newTooltip);
+        }
+    }
+}
+
 BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     : AudioProcessorEditor(p),
       processor_(p),
