@@ -21,9 +21,9 @@ All of these plugins are in beta. The macOS and Linux builds are not up to date,
 - **Solo Bass:** Auditions only the band below the crossover.
 - **Output:** Trim from −24 dB to +12 dB.
 - **Bypass:** Host bypass. Audio crossfades back to the dry input, output trim included.
-- **Correlation meter:** −1 to +1, with a large center readout.
+- **Correlation meter:** −1 to +1 for the full band and for the band below the crossover, smoothed over 300 ms. It reads `--` in silence and turns amber below 0.
 
-The stereo-field rings pulse on each host quarter note, follow tempo changes and seeks, and freeze on stop. Standalone uses a 120 BPM sample clock. The two center lines show upper-band width.
+The stereo-field rings pulse on each host quarter note, follow tempo changes and seeks, and freeze on stop. Standalone uses a 120 BPM sample clock. The long thin lines show upper-band width and the short thick lines show bass width. The caption under the field names both.
 
 The editor is resizable from 720×520 with no locked aspect ratio. The window size is saved with the session.
 
@@ -45,7 +45,7 @@ Factory presets are read-only. User presets save, rename, and delete under `~/Do
 
 ## Session tools
 
-Undo and redo use the editor buttons or Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z (Ctrl+Y redoes). A slider drag or a button click is one step. A and B keep two full states, with copy A to B and B to A.
+Undo and redo use the editor buttons or Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z (Ctrl+Y redoes). A slider drag, a typed value or a button click is one step. A and B keep two full states, each with its own undo history, so switching slots adds no step. Copying into a slot clears that slot's history.
 
 ## Formats
 
