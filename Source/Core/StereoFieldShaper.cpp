@@ -14,7 +14,7 @@ constexpr float kCeilingLinear = 0.98855309f; // -0.10 dBFS
 constexpr std::array<double, 4> kDiffuserDelaySeconds { 0.0011, 0.0023, 0.0037, 0.0053 };
 constexpr std::array<float, 4> kDiffuserGains { 0.62f, -0.58f, 0.55f, -0.52f };
 constexpr double kCorrelationSeconds = 0.3;
-// Silence uses a faster follower, so the meter shows it within 0.7 s after the audio stops.
+// A faster follower detects silence within 0.7 s of the audio stopping.
 constexpr double kSilenceSeconds = 0.05;
 constexpr double kSilentPower = 2.0e-6;
 

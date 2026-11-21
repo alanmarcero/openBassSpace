@@ -26,7 +26,8 @@ public:
     void performMutation(const juce::String& name, const std::function<void()>& mutate);
     void selectSlot(int slot);
     void clearSlot(int slot);
-    void clear();
+    // Clears both histories and makes activeSlot's history the active one.
+    void clear(int activeSlot);
 
     [[nodiscard]] bool isApplying() const noexcept { return applying_; }
 

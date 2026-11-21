@@ -427,8 +427,7 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         presetEdited_.store(false, std::memory_order_relaxed);
         slots_[0] = captureSlot();
         slots_[1] = slots_[0];
-        history_.clear();
-        history_.selectSlot(activeSlot_);
+        history_.clear(activeSlot_);
         return;
     }
 
@@ -461,8 +460,7 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         }
     }
 
-    history_.clear();
-    history_.selectSlot(activeSlot_);
+    history_.clear(activeSlot_);
     if (auto* editor = getActiveEditor()) {
         editor->setSize(editorWidth_, editorHeight_);
     }

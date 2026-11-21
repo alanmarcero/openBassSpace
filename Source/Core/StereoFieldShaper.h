@@ -141,7 +141,7 @@ private:
     StereoCeilingGuard ceilingGuard_{};
 };
 
-// Phase correlation over about 300 ms, for the whole band and for the band below the crossover.
+// Phase correlation over 300 ms for the whole band and the band below the crossover.
 // A reading is NaN while its band is below -60 dBFS.
 class CorrelationMeter {
 public:

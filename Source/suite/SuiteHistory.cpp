@@ -58,12 +58,11 @@ SuiteHistory::~SuiteHistory() {
     }
 }
 
-void SuiteHistory::clear() {
-    gestureDepth_ = 0;
-    gestureStart_ = {};
+void SuiteHistory::clear(int activeSlot) {
     for (auto& history : histories_) {
         history.clearUndoHistory();
     }
+    selectSlot(activeSlot);
 }
 
 void SuiteHistory::selectSlot(int slot) {

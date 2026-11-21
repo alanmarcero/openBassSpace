@@ -109,7 +109,7 @@ void FineSlider::mouseDown(const juce::MouseEvent& e) {
     juce::Slider::mouseDown(e);
 }
 
-// Shift scales each mouse step, so pressing or releasing Shift mid-drag does not jump the value.
+// Shift scales each mouse step, so a Shift change mid-drag does not jump the value.
 void FineSlider::mouseDrag(const juce::MouseEvent& e) {
     const float speed = e.mods.isShiftDown() ? 0.1f : 1.0f;
     dragPosition_ += (e.position - lastMouse_) * speed;
@@ -315,7 +315,7 @@ void BassSpaceEditor::refreshDisplay() {
 
     const std::array<float, 6> field { processor_.artworkPhase(), processor_.currentWidth(), processor_.currentUpperWidth(),
                                        processor_.currentFrequency(), processor_.currentStereoize(),
-                                       processor_.currentSoloLow() ? 1.0f : 0.0f };
+                                       soloBass ? 1.0f : 0.0f };
     if (field != lastField_) {
         lastField_ = field;
         repaint(ringArea_);
@@ -331,10 +331,12 @@ void BassSpaceEditor::refreshDisplay() {
 }
 
 void BassSpaceEditor::updateMeter() {
-    const std::array<float, 2> readings { processor_.currentCorrelation(), processor_.currentBassCorrelation() };
-    const std::array<juce::Label*, 2> values { &correlationValueLabel_, &bassCorrelationValueLabel_ };
-    for (size_t row = 0; row < values.size(); ++row) {
-        const float hundredths = std::round(readings[row] * 100.0f) / 100.0f;
+    const std::array<std::pair<juce::Label*, float>, 2> rows {{
+        { &correlationValueLabel_, processor_.currentCorrelation() },
+        { &bassCorrelationValueLabel_, processor_.currentBassCorrelation() },
+    }};
+    for (const auto& [value, reading] : rows) {
+        const float hundredths = std::round(reading * 100.0f) / 100.0f;
         const auto text = [hundredths]() -> juce::String {
             if (std::isnan(hundredths)) {
                 return "--";
@@ -350,11 +352,11 @@ void BassSpaceEditor::updateMeter() {
             }
             return hundredths < -0.005f ? kAccentGold : kAccentMint;
         }();
-        if (text != values[row]->getText()) {
+        if (text != value->getText()) {
             repaint(meterArea_);
         }
-        values[row]->setText(text, juce::dontSendNotification);
-        values[row]->setColour(juce::Label::textColourId, colour);
+        value->setText(text, juce::dontSendNotification);
+        value->setColour(juce::Label::textColourId, colour);
     }
     const auto crossover = processor_.parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText();
     bassCorrelationLabel_.setText("Below " + crossover, juce::dontSendNotification);
@@ -511,13 +513,15 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     caption.append(upperCaption, captionFont, widthColour(upperWidth).withAlpha(soloBass ? 0.6f : 1.0f));
     caption.draw(g, ringArea_.toFloat().removeFromBottom(16.0f));
 
-    const std::array<float, 2> readings { processor_.currentCorrelation(), processor_.currentBassCorrelation() };
-    for (size_t row = 0; row < correlationTracks_.size(); ++row) {
-        const auto& track = correlationTracks_[row];
+    const std::array<std::pair<juce::Rectangle<float>, float>, 2> bars {{
+        { correlationTracks_[0], processor_.currentCorrelation() },
+        { correlationTracks_[1], processor_.currentBassCorrelation() },
+    }};
+    for (const auto& [track, correlation] : bars) {
         g.setColour(kPanelEdge);
         g.fillRoundedRectangle(track, 3.0f);
-        if (!std::isnan(readings[row])) {
-            const float reading = juce::jlimit(-1.0f, 1.0f, readings[row]);
+        if (!std::isnan(correlation)) {
+            const float reading = juce::jlimit(-1.0f, 1.0f, correlation);
             const float end = track.getCentreX() + reading * track.getWidth() * 0.5f;
             g.setColour(reading < 0.0f ? kAccentGold : kAccentMint);
             g.fillRoundedRectangle(track.withX(std::min(track.getCentreX(), end)).withWidth(std::abs(end - track.getCentreX())),

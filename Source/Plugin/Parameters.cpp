@@ -7,7 +7,7 @@ juce::String percentText(float percent, int) {
     return juce::String(juce::roundToInt(percent)) + "%";
 }
 
-// Rounds before the sign check, so values near zero read "0.0 dB", never "-0.0 dB".
+// Rounding first stops values near zero from reading "-0.0 dB".
 juce::String decibelText(float decibels, int) {
     const float tenths = std::round(decibels * 10.0f) / 10.0f;
     if (std::abs(tenths) < 0.05f) {

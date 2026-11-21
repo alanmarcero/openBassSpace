@@ -125,8 +125,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     refresh();
 }
 
-// Keeps the selection on the same preset. A preset the filter hides is deselected,
-// so Rename and Delete never act on whatever row takes its index.
+// Deselects a preset the filter hides, so Rename and Delete never reach the row that takes its index.
 void PresetBrowser::refresh() {
     const auto* current = selected();
     const auto selectedName = current != nullptr ? current->name : juce::String();

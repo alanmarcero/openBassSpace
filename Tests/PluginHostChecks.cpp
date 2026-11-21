@@ -29,26 +29,27 @@ static void save(juce::Component& c, const juce::String& path) {
             "capture failed");
 }
 
-static bool hasVisibleLabel(juce::Component& component, const juce::String& text) {
-    if (auto* label = dynamic_cast<juce::Label*>(&component);
-        label != nullptr && label->getText() == text && !label->getBounds().isEmpty()) {
-        return true;
-    }
-    return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&text](auto* child) {
-        return child->isVisible() && hasVisibleLabel(*child, text);
-    });
-}
-
-static juce::Label* findLabel(juce::Component& component, const juce::String& text) {
-    if (auto* label = dynamic_cast<juce::Label*>(&component); label != nullptr && label->getText() == text) {
-        return label;
+// Returns the first component of the given type that matches, searching only visible children.
+template <typename Type>
+static Type* findVisible(juce::Component& component, const std::function<bool(const Type&)>& matches) {
+    if (auto* typed = dynamic_cast<Type*>(&component); typed != nullptr && matches(*typed)) {
+        return typed;
     }
     for (auto* child : component.getChildren()) {
-        if (auto* found = findLabel(*child, text)) {
+        if (!child->isVisible()) {
+            continue;
+        }
+        if (auto* found = findVisible<Type>(*child, matches)) {
             return found;
         }
     }
     return nullptr;
+}
+
+static bool hasVisibleLabel(juce::Component& component, const juce::String& text) {
+    return findVisible<juce::Label>(component, [&text](const juce::Label& label) {
+        return label.getText() == text && !label.getBounds().isEmpty();
+    }) != nullptr;
 }
 
 static juce::Component* findById(juce::Component& component, const juce::String& id) {
@@ -105,21 +106,6 @@ static juce::String overlappingChildren(juce::Component& parent) {
     return {};
 }
 
-static juce::Button* findVisibleButton(juce::Component& component, const std::function<bool(const juce::Button&)>& matches) {
-    if (auto* button = dynamic_cast<juce::Button*>(&component); button != nullptr && matches(*button)) {
-        return button;
-    }
-    for (auto* child : component.getChildren()) {
-        if (!child->isVisible()) {
-            continue;
-        }
-        if (auto* found = findVisibleButton(*child, matches)) {
-            return found;
-        }
-    }
-    return nullptr;
-}
-
 static bool isUnder36(const juce::Button& button) {
     return button.getHeight() < 36;
 }
@@ -163,10 +149,10 @@ static void checkLayout(juce::Component& editor, const juce::String& when) {
     const auto overlap = overlappingChildren(editor);
     require(overlap.isEmpty(), (when + ": " + overlap).toRawUTF8());
     require(smallestDial(editor) >= 64, (when + ": every dial is at least 64 px").toRawUTF8());
-    require(findVisibleButton(editor, isUnder36) == nullptr, (when + ": every button is at least 36 px tall").toRawUTF8());
+    require(findVisible<juce::Button>(editor, isUnder36) == nullptr, (when + ": every button is at least 36 px tall").toRawUTF8());
     const auto clearance = [&editor](const juce::String& upperTitle, const juce::String& lowerName) {
         auto* upper = findSlider(editor, upperTitle);
-        auto* lower = findLabel(editor, lowerName);
+        auto* lower = findVisible<juce::Label>(editor, [&lowerName](const juce::Label& label) { return label.getText() == lowerName; });
         require(upper != nullptr && lower != nullptr, "stacked knobs exist");
         return lower->getY() - editor.getLocalArea(upper, valueBoxOf(*upper)->getBounds()).getBottom();
     };
@@ -398,10 +384,10 @@ int main(int argc, char** argv) {
     const auto& editorChildren = editor->getChildren();
     const bool everyDialTitled = std::all_of(editorChildren.begin(), editorChildren.end(), [&editor](auto* child) {
         auto* slider = dynamic_cast<juce::Slider*>(child);
-        return slider == nullptr || (slider->getTitle().isNotEmpty() && findLabel(*editor, slider->getTitle()) != nullptr);
+        return slider == nullptr || (slider->getTitle().isNotEmpty() && hasVisibleLabel(*editor, slider->getTitle()));
     });
     require(everyDialTitled && findSlider(*editor, "Output dB") != nullptr, "each dial's title is its visible name");
-    require(findVisibleButton(*editor, [](const juce::Button& button) { return button.getTitle().isEmpty(); }) == nullptr,
+    require(findVisible<juce::Button>(*editor, [](const juce::Button& button) { return button.getTitle().isEmpty(); }) == nullptr,
             "every button has a spoken title");
     require(findById(*editor, "compareA")->getTitle() == "Slot A" && findById(*editor, "copyAtoB")->getTitle() == "Copy A to B",
             "abbreviated buttons have spoken titles");
@@ -409,7 +395,7 @@ int main(int argc, char** argv) {
     presetButton->triggerClick();
     pump();
     auto* browser = findById(*editor, "presetBrowser");
-    require(browser != nullptr && browser->isVisible() && findVisibleButton(*browser, isUnder36) == nullptr,
+    require(browser != nullptr && browser->isVisible() && findVisible<juce::Button>(*browser, isUnder36) == nullptr,
             "the open preset browser keeps its buttons at least 36 px tall");
     presetButton->triggerClick();
     pump();
