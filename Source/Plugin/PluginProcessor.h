@@ -105,7 +105,6 @@ public:
     void redo();
     [[nodiscard]] bool canUndo() const;
     [[nodiscard]] bool canRedo() const;
-    juce::UndoManager& undoManager() noexcept { return history_.undo; }
 
     [[nodiscard]] int activeCompareSlot() const noexcept { return activeSlot_; }
     void selectCompareSlot(int slot);
@@ -122,7 +121,7 @@ public:
 private:
     void processAudio(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, bool forceBypass);
     void restoreParameterTree(juce::ValueTree tree);
-    [[nodiscard]] juce::ValueTree captureMemory();
+    [[nodiscard]] juce::ValueTree captureMemory() const;
     void restoreMemory(const juce::ValueTree& memory);
     void applyValues(const alanmarcero::suite::ParameterSnapshot& values);
 

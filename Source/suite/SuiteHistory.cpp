@@ -40,7 +40,9 @@ private:
 
 SuiteHistory::SuiteHistory(juce::AudioProcessor& processor, Capture capture, Restore restore)
     : processor_(processor), capture_(std::move(capture)), restore_(std::move(restore)) {
-    undo.setMaxNumberOfStoredUnits(80, 24);
+    for (auto& history : histories_) {
+        history.setMaxNumberOfStoredUnits(80, 24);
+    }
     for (auto* parameter : processor_.getParameters()) {
         if (parameter != nullptr) {
             parameter->addListener(this);
@@ -59,7 +61,19 @@ SuiteHistory::~SuiteHistory() {
 void SuiteHistory::clear() {
     gestureDepth_ = 0;
     gestureStart_ = {};
-    undo.clearUndoHistory();
+    for (auto& history : histories_) {
+        history.clearUndoHistory();
+    }
+}
+
+void SuiteHistory::selectSlot(int slot) {
+    gestureDepth_ = 0;
+    gestureStart_ = {};
+    activeSlot_ = slot;
+}
+
+void SuiteHistory::clearSlot(int slot) {
+    histories_[static_cast<size_t>(slot)].clearUndoHistory();
 }
 
 bool SuiteHistory::onMessageThread() const {
@@ -86,8 +100,8 @@ void SuiteHistory::commit(const juce::String& name, const Memory& before, const 
         return;
     }
 
-    undo.beginNewTransaction(name);
-    undo.perform(new SnapshotAction(*this, before.createCopy(), after.createCopy()));
+    activeHistory().beginNewTransaction(name);
+    activeHistory().perform(new SnapshotAction(*this, before.createCopy(), after.createCopy()));
 }
 
 void SuiteHistory::parameterValueChanged(int, float) {}

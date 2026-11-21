@@ -751,9 +751,24 @@ int main(int argc, char** argv) {
         suite.selectCompareSlot(0);
         require(std::abs(suite.currentWidth() - 55.0f) < 0.25f, "copy leaves A unchanged");
         suite.undo();
+        require(suite.activeCompareSlot() == 0 && std::abs(suite.currentWidth()) < 0.25f,
+                "undo in slot A reverts A's last edit and stays in A");
+        suite.redo();
+        suite.selectCompareSlot(1);
+        require(!suite.canUndo(), "copying into a slot clears that slot's undo history");
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(30.0f));
+        width->endChangeGesture();
+        width->beginChangeGesture();
+        width->setValueNotifyingHost(width->convertTo0to1(45.0f));
+        width->endChangeGesture();
+        suite.selectCompareSlot(0);
+        require(suite.canUndo() && !suite.canRedo() && std::abs(suite.currentWidth() - 55.0f) < 0.25f,
+                "switching back to A brings back A's own history");
+        suite.selectCompareSlot(1);
         suite.undo();
-        require(suite.activeCompareSlot() == 1, "undo restores the compare slot");
-        require(std::abs(suite.currentWidth() - 15.0f) < 0.25f, "undo restores the slot that copy replaced");
+        require(suite.activeCompareSlot() == 1 && std::abs(suite.currentWidth() - 30.0f) < 0.25f,
+                "undo in slot B reverts B's own last edit");
 
         suiteEditor->setSize(1020, 680);
         juce::MemoryBlock suiteState;

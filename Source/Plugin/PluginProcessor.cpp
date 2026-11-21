@@ -217,19 +217,19 @@ void BassSpaceProcessor::setEditorSize(int width, int height) noexcept {
 }
 
 void BassSpaceProcessor::undo() {
-    history_.undo.undo();
+    history_.activeHistory().undo();
 }
 
 void BassSpaceProcessor::redo() {
-    history_.undo.redo();
+    history_.activeHistory().redo();
 }
 
 bool BassSpaceProcessor::canUndo() const {
-    return history_.undo.canUndo();
+    return history_.activeHistory().canUndo();
 }
 
 bool BassSpaceProcessor::canRedo() const {
-    return history_.undo.canRedo();
+    return history_.activeHistory().canRedo();
 }
 
 void BassSpaceProcessor::selectCompareSlot(int slot) {
@@ -237,10 +237,10 @@ void BassSpaceProcessor::selectCompareSlot(int slot) {
         return;
     }
 
-    history_.performMutation("A/B", [this] {
-        activeSlot_ ^= 1;
-        applyValues(slots_[static_cast<size_t>(activeSlot_)]);
-    });
+    slots_[static_cast<size_t>(activeSlot_)] = currentParameterValues();
+    activeSlot_ = slot;
+    history_.selectSlot(slot);
+    applyValues(slots_[static_cast<size_t>(slot)]);
 }
 
 void BassSpaceProcessor::copyCompareSlot(int from, int to) {
@@ -248,15 +248,14 @@ void BassSpaceProcessor::copyCompareSlot(int from, int to) {
         return;
     }
 
-    history_.performMutation(from == 0 ? "Copy A to B" : "Copy B to A", [this, from, to] {
-        if (from == activeSlot_) {
-            slots_[static_cast<size_t>(from)] = currentParameterValues();
-        }
-        slots_[static_cast<size_t>(to)] = slots_[static_cast<size_t>(from)];
-        if (to == activeSlot_) {
-            applyValues(slots_[static_cast<size_t>(to)]);
-        }
-    });
+    if (from == activeSlot_) {
+        slots_[static_cast<size_t>(from)] = currentParameterValues();
+    }
+    slots_[static_cast<size_t>(to)] = slots_[static_cast<size_t>(from)];
+    history_.clearSlot(to);
+    if (to == activeSlot_) {
+        applyValues(slots_[static_cast<size_t>(to)]);
+    }
 }
 
 void BassSpaceProcessor::loadPreset(const alanmarcero::suite::PresetEntry& preset) {
@@ -301,32 +300,19 @@ void BassSpaceProcessor::applyValues(const alanmarcero::suite::ParameterSnapshot
     }
 }
 
-juce::ValueTree BassSpaceProcessor::captureMemory() {
-    auto values = currentParameterValues();
-    slots_[static_cast<size_t>(activeSlot_)] = values;
-
+juce::ValueTree BassSpaceProcessor::captureMemory() const {
     juce::ValueTree memory("SuiteMemory");
-    memory.setProperty("activeSlot", activeSlot_, nullptr);
     memory.setProperty("program", currentProgram_, nullptr);
     memory.setProperty("presetName", currentPresetName_, nullptr);
-    memory.appendChild(alanmarcero::suite::snapshotToTree("Params", values), nullptr);
-    memory.appendChild(alanmarcero::suite::snapshotToTree("Slot0", slots_[0]), nullptr);
-    memory.appendChild(alanmarcero::suite::snapshotToTree("Slot1", slots_[1]), nullptr);
+    memory.appendChild(alanmarcero::suite::snapshotToTree("Params", currentParameterValues()), nullptr);
     return memory;
 }
 
 void BassSpaceProcessor::restoreMemory(const juce::ValueTree& memory) {
-    activeSlot_ = juce::jlimit(0, 1, static_cast<int>(memory.getProperty("activeSlot", activeSlot_)));
     currentProgram_ = juce::jlimit(0, getNumPrograms() - 1, static_cast<int>(memory.getProperty("program", currentProgram_)));
     currentPresetName_ = memory.getProperty("presetName", currentPresetName_).toString();
     if (auto params = memory.getChildWithName("Params"); params.isValid()) {
         applyValues(alanmarcero::suite::snapshotFromTree(params));
-    }
-    if (auto slot = memory.getChildWithName("Slot0"); slot.isValid()) {
-        slots_[0] = alanmarcero::suite::snapshotFromTree(slot);
-    }
-    if (auto slot = memory.getChildWithName("Slot1"); slot.isValid()) {
-        slots_[1] = alanmarcero::suite::snapshotFromTree(slot);
     }
 }
 
