@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <limits>
 
@@ -104,20 +105,23 @@ static juce::String overlappingChildren(juce::Component& parent) {
     return {};
 }
 
-// Names the first visible button under 36 px tall, or returns an empty string.
-static juce::String shortButton(juce::Component& component) {
-    if (auto* button = dynamic_cast<juce::Button*>(&component); button != nullptr && button->getHeight() < 36) {
-        return button->getButtonText() + " is " + juce::String(button->getHeight()) + " px tall";
+static juce::Button* findVisibleButton(juce::Component& component, const std::function<bool(const juce::Button&)>& matches) {
+    if (auto* button = dynamic_cast<juce::Button*>(&component); button != nullptr && matches(*button)) {
+        return button;
     }
     for (auto* child : component.getChildren()) {
         if (!child->isVisible()) {
             continue;
         }
-        if (const auto found = shortButton(*child); found.isNotEmpty()) {
+        if (auto* found = findVisibleButton(*child, matches)) {
             return found;
         }
     }
-    return {};
+    return nullptr;
+}
+
+static bool isUnder36(const juce::Button& button) {
+    return button.getHeight() < 36;
 }
 
 static int smallestDial(juce::Component& parent) {
@@ -159,15 +163,14 @@ static void checkLayout(juce::Component& editor, const juce::String& when) {
     const auto overlap = overlappingChildren(editor);
     require(overlap.isEmpty(), (when + ": " + overlap).toRawUTF8());
     require(smallestDial(editor) >= 64, (when + ": every dial is at least 64 px").toRawUTF8());
-    const auto tooShort = shortButton(editor);
-    require(tooShort.isEmpty(), (when + ": " + tooShort).toRawUTF8());
+    require(findVisibleButton(editor, isUnder36) == nullptr, (when + ": every button is at least 36 px tall").toRawUTF8());
     const auto clearance = [&editor](const juce::String& upperTitle, const juce::String& lowerName) {
         auto* upper = findSlider(editor, upperTitle);
         auto* lower = findLabel(editor, lowerName);
         require(upper != nullptr && lower != nullptr, "stacked knobs exist");
         return lower->getY() - editor.getLocalArea(upper, valueBoxOf(*upper)->getBounds()).getBottom();
     };
-    require(clearance("Crossover frequency", "Stereoize") >= 12 && clearance("Bass stereo width", "Upper width") >= 12,
+    require(clearance("Crossover", "Stereoize") >= 12 && clearance("Bass width", "Upper width") >= 12,
             (when + ": each stacked value sits clear of the next knob's name").toRawUTF8());
 }
 
@@ -392,18 +395,21 @@ int main(int argc, char** argv) {
     require(hasVisibleLabel(*editor, "120 Hz"), "Crossover value includes frequency units");
     require(hasVisibleLabel(*editor, "0%"), "Stereo width value includes percent units");
     require(hasVisibleLabel(*editor, "0.0 dB"), "Output value includes decibel units");
-    require(findSlider(*editor, "Crossover frequency") != nullptr, "Crossover control has an accessibility title");
-    require(findSlider(*editor, "Bass stereo width") != nullptr, "Bass width control has an accessibility title");
-    require(findSlider(*editor, "Upper-band width") != nullptr, "Upper-band width control has an accessibility title");
-    require(findSlider(*editor, "Stereoize") != nullptr, "Stereoize control has an accessibility title");
-    require(findSlider(*editor, "Sub harmonic drive") != nullptr, "Sub drive control has an accessibility title");
-    require(findSlider(*editor, "Upper air tilt") != nullptr, "Upper tilt control has an accessibility title");
-    require(findSlider(*editor, "Output level") != nullptr, "Output control has an accessibility title");
+    const auto& editorChildren = editor->getChildren();
+    const bool everyDialTitled = std::all_of(editorChildren.begin(), editorChildren.end(), [&editor](auto* child) {
+        auto* slider = dynamic_cast<juce::Slider*>(child);
+        return slider == nullptr || (slider->getTitle().isNotEmpty() && findLabel(*editor, slider->getTitle()) != nullptr);
+    });
+    require(everyDialTitled && findSlider(*editor, "Output dB") != nullptr, "each dial's title is its visible name");
+    require(findVisibleButton(*editor, [](const juce::Button& button) { return button.getTitle().isEmpty(); }) == nullptr,
+            "every button has a spoken title");
+    require(findById(*editor, "compareA")->getTitle() == "Slot A" && findById(*editor, "copyAtoB")->getTitle() == "Copy A to B",
+            "abbreviated buttons have spoken titles");
     checkLayout(*editor, "default size");
     presetButton->triggerClick();
     pump();
     auto* browser = findById(*editor, "presetBrowser");
-    require(browser != nullptr && browser->isVisible() && shortButton(*browser).isEmpty(),
+    require(browser != nullptr && browser->isVisible() && findVisibleButton(*browser, isUnder36) == nullptr,
             "the open preset browser keeps its buttons at least 36 px tall");
     presetButton->triggerClick();
     pump();
@@ -927,8 +933,8 @@ int main(int argc, char** argv) {
     {
         BassSpaceProcessor entry;
         std::unique_ptr<juce::AudioProcessorEditor> entryEditor(entry.createEditor());
-        auto* crossover = findSlider(*entryEditor, "Crossover frequency");
-        auto* width = findSlider(*entryEditor, "Bass stereo width");
+        auto* crossover = findSlider(*entryEditor, "Crossover");
+        auto* width = findSlider(*entryEditor, "Bass width");
         require(crossover != nullptr && width != nullptr, "dials for typed entry exist");
 
         const auto type = [](juce::Slider& slider, const juce::String& text) {

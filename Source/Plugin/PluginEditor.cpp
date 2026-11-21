@@ -30,8 +30,8 @@ juce::Colour widthColour(float percent) {
     return kTextWhite;
 }
 
-void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickValue,
-                   const juce::String& title, const juce::String& description, const juce::String& tooltip) {
+void configureKnob(juce::Slider& slider, juce::Label& name, const juce::String& title, juce::Colour fill,
+                   const juce::String& tooltip) {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 96, kValueHeight);
     slider.setColour(juce::Slider::textBoxTextColourId, fill);
@@ -40,30 +40,26 @@ void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickVa
     slider.setColour(juce::Slider::rotarySliderFillColourId, fill);
     slider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
     slider.setColour(juce::Slider::thumbColourId, kTextWhite);
-    slider.setDoubleClickReturnValue(true, doubleClickValue);
     slider.setTitle(title);
-    slider.setDescription(description);
+    slider.setDescription(tooltip);
     slider.setTooltip(tooltip);
     slider.setWantsKeyboardFocus(true);
     slider.setMouseClickGrabsKeyboardFocus(false);
+    name.setText(title, juce::dontSendNotification);
+    name.setJustificationType(juce::Justification::centred);
+    name.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    name.setColour(juce::Label::textColourId, kTextWhite);
 }
 
-void configureName(juce::Label& label, const juce::String& text) {
-    label.setText(text, juce::dontSendNotification);
-    label.setJustificationType(juce::Justification::centred);
-    label.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-    label.setColour(juce::Label::textColourId, kTextWhite);
-}
-
-void configureModeButton(juce::TextButton& button, juce::Colour activeColour,
-                         const juce::String& title, const juce::String& description, const juce::String& tooltip) {
+void configureModeButton(juce::TextButton& button, juce::Colour activeColour, const juce::String& title,
+                         const juce::String& tooltip) {
     button.setClickingTogglesState(true);
     button.setColour(juce::TextButton::buttonColourId, kPanel);
     button.setColour(juce::TextButton::buttonOnColourId, activeColour);
     button.setColour(juce::TextButton::textColourOffId, kTextWhite);
     button.setColour(juce::TextButton::textColourOnId, kBackground);
     button.setTitle(title);
-    button.setDescription(description);
+    button.setDescription(tooltip);
     button.setTooltip(tooltip);
     button.setMouseClickGrabsKeyboardFocus(false);
 }
@@ -148,25 +144,14 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         BinaryData::analogcyberfaceplate_png, BinaryData::analogcyberfaceplate_pngSize);
     stereoField_ = juce::Drawable::createFromImageData(BinaryData::stereofield_svg, BinaryData::stereofield_svgSize);
 
-    configureKnob(freqSlider_, kAccentMint, 120.0, "Crossover frequency",
-                  "Sets the boundary between the bass and upper stereo width controls.",
+    configureKnob(freqSlider_, freqLabel_, "Crossover", kAccentMint,
                   "Set the boundary between Bass width and Upper width.");
-    configureName(freqLabel_, "Crossover");
-
-    configureKnob(widthSlider_, kAccentGold, 0.0, "Bass stereo width",
-                  "Sets the stereo width below the crossover frequency.",
+    configureKnob(widthSlider_, widthLabel_, "Bass width", kAccentGold,
                   "Set the bass stereo width below the crossover frequency.");
-    configureName(widthLabel_, "Bass width");
-
-    configureKnob(upperWidthSlider_, kAccentGold, 100.0, "Upper-band width",
-                  "Sets stereo width above the crossover frequency.",
+    configureKnob(upperWidthSlider_, upperWidthLabel_, "Upper width", kAccentGold,
                   "Set stereo width above the crossover frequency.");
-    configureName(upperWidthLabel_, "Upper width");
-
-    configureKnob(stereoizeSlider_, kAccentMint, 0.0, "Stereoize",
-                  "Adds a mono-compatible decorrelated side signal above the crossover.",
+    configureKnob(stereoizeSlider_, stereoizeLabel_, "Stereoize", kAccentMint,
                   "Add a decorrelated side signal above the crossover. The bass remains centered.");
-    configureName(stereoizeLabel_, "Stereoize");
 
     correlationLabel_.setText("Correlation", juce::dontSendNotification);
     correlationValueLabel_.setComponentID("correlationValue");
@@ -181,29 +166,18 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         value->setFont(juce::FontOptions(18.0f, juce::Font::bold));
     }
 
-    configureKnob(outputDbSlider_, kAccentMint, 0.0, "Output level",
-                  "Sets the plug-in output level in decibels.",
+    configureKnob(outputDbSlider_, outputDbLabel_, "Output dB", kAccentMint,
                   "Set the plug-in output level in decibels.");
-    configureName(outputDbLabel_, "Output dB");
-
-    configureKnob(subDriveSlider_, kAccentMint, 0.0, "Sub harmonic drive",
-                  "Adds mono-locked sub-octave and harmonic warmth to the bass band.",
+    configureKnob(subDriveSlider_, subDriveLabel_, "Sub drive", kAccentMint,
                   "Blend mono-locked sub-octave synthesis and ADAA saturation into the bass band.");
-    configureName(subDriveLabel_, "Sub drive");
-
-    configureKnob(upperTiltSlider_, kAccentGold, 0.0, "Upper air tilt",
-                  "Tilts the upper stereo band brightness from -6 dB to +6 dB.",
+    configureKnob(upperTiltSlider_, upperTiltLabel_, "Upper tilt", kAccentGold,
                   "Tilt upper-band high frequencies (-6 dB dark to +6 dB air).");
-    configureName(upperTiltLabel_, "Upper tilt");
 
-    configureModeButton(soloLowButton_, kAccentMint, "Solo bass band",
-                        "Auditions only the low-frequency band below the crossover.",
+    configureModeButton(soloLowButton_, kAccentMint, "Solo bass",
                         "Audition the isolated bass band below the crossover frequency.");
-    configureModeButton(slopeButton_, kAccentGold, "Slope",
-                        "Switches the crossover slope between 24 dB and 48 dB per octave.",
+    configureModeButton(slopeButton_, kAccentGold, "Slope 24 dB",
                         "Switch the crossover slope between 24 dB and 48 dB per octave. 48 dB separates the bands more sharply.");
     configureModeButton(ellipticalButton_, kAccentMint, "Side-only split",
-                        "Splits only the Side at the crossover and passes the Mid unfiltered.",
                         "Split only the Side at the crossover. The Mid passes unfiltered and keeps its phase "
                         "while Sub drive and Upper tilt are at 0.");
     slopeButton_.setComponentID("slopeButton");
@@ -247,7 +221,9 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     slopeAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kSlope, slopeButton_);
     slopeButton_.onStateChange = [this] {
-        slopeButton_.setButtonText("SLOPE " + processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText());
+        const auto slope = processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText();
+        slopeButton_.setButtonText("SLOPE " + slope);
+        slopeButton_.setTitle("Slope " + slope);
     };
     slopeButton_.onStateChange();
     ellipticalAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(

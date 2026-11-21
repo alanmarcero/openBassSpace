@@ -34,6 +34,9 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         field->setColour(juce::TextEditor::focusedOutlineColourId, kMint);
         addAndMakeVisible(field);
     }
+    search_.setTitle("Search presets");
+    name_.setTitle("Preset name");
+    list_.setTitle("Presets");
     search_.setComponentID("presetSearch");
     name_.setComponentID("presetName");
     list_.setComponentID("presetList");
@@ -60,6 +63,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         button->setColour(juce::TextButton::textColourOffId, kText);
         button->setColour(juce::TextButton::textColourOnId, kBackground);
         button->setMouseClickGrabsKeyboardFocus(false);
+        button->setTitle(button->getButtonText());
         addAndMakeVisible(button);
     }
 
@@ -201,6 +205,7 @@ void PresetBrowser::arm(juce::TextButton& button, const juce::String& question) 
     armed_ = &button;
     armedText_ = button.getButtonText();
     button.setButtonText(question);
+    button.setTitle(question);
     startTimer(3000);
 }
 
@@ -210,6 +215,7 @@ void PresetBrowser::disarm() {
         return;
     }
     armed_->setButtonText(armedText_);
+    armed_->setTitle(armedText_);
     armed_ = nullptr;
 }
 
@@ -221,6 +227,7 @@ void PresetBrowser::updateButtons() {
     remove_.setEnabled(user);
     favorite_.setEnabled(entry != nullptr);
     favorite_.setButtonText(entry != nullptr && entry->favorite ? "Unfavorite" : "Favorite");
+    favorite_.setTitle(favorite_.getButtonText());
     save_.setEnabled(name.isNotEmpty() && !library_.isFactoryName(name));
 }
 
@@ -273,6 +280,11 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     nextPreset_.setTooltip("Next preset");
     previousPreset_.setTitle("Previous preset");
     nextPreset_.setTitle("Next preset");
+    for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &bypassButton_ }) {
+        button->setTitle(button->getButtonText());
+    }
+    aButton_.setTitle("Slot A");
+    bButton_.setTitle("Slot B");
 
     undoButton_.onClick = [this] { if (actions_.undo) actions_.undo(); refresh(); };
     redoButton_.onClick = [this] { if (actions_.redo) actions_.redo(); refresh(); };
@@ -307,6 +319,7 @@ void SuiteStrip::refresh() {
     redoButton_.setEnabled(!actions_.canRedo || actions_.canRedo());
     const auto name = actions_.presetName ? actions_.presetName() : juce::String();
     presetButton_.setButtonText(name.isNotEmpty() ? name : juce::String("Presets"));
+    presetButton_.setTitle(presetButton_.getButtonText());
 }
 
 void SuiteStrip::paint(juce::Graphics& g) {
