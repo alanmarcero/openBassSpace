@@ -36,6 +36,7 @@ public:
     bool setFavorite(const juce::String& name, bool factory, bool favorite);
 
     [[nodiscard]] bool isFactoryName(const juce::String& name) const;
+    [[nodiscard]] bool hasUser(const juce::String& name) const;
 
 private:
     [[nodiscard]] juce::File fileFor(const juce::String& name) const;

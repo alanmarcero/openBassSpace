@@ -1,4 +1,5 @@
 #include "PresetLibrary.h"
+#include <algorithm>
 
 namespace alanmarcero::suite {
 namespace {
@@ -59,6 +60,10 @@ bool PresetLibrary::isFactoryName(const juce::String& name) const {
         }
     }
     return false;
+}
+
+bool PresetLibrary::hasUser(const juce::String& name) const {
+    return std::any_of(user_.begin(), user_.end(), [&name](const PresetEntry& entry) { return sameName(entry.name, name); });
 }
 
 PresetEntry* PresetLibrary::findUser(const juce::String& name) {

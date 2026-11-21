@@ -1,4 +1,5 @@
 #include "SuiteStrip.h"
+#include <algorithm>
 
 namespace alanmarcero::suite {
 namespace {
@@ -24,13 +25,29 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
                              std::function<ParameterSnapshot()> capture,
                              std::function<void(const PresetEntry&)> load)
     : library_(library), capture_(std::move(capture)), load_(std::move(load)) {
-    search_.setTextToShowWhenEmpty("Search or name a preset", kDim);
-    search_.setColour(juce::TextEditor::backgroundColourId, kBackground);
-    search_.setColour(juce::TextEditor::textColourId, kText);
-    search_.setColour(juce::TextEditor::outlineColourId, kEdge);
-    search_.setColour(juce::TextEditor::focusedOutlineColourId, kMint);
+    search_.setTextToShowWhenEmpty("Search presets", kDim);
+    name_.setTextToShowWhenEmpty("Name for Save or Rename", kDim);
+    for (auto* field : { &search_, &name_ }) {
+        field->setColour(juce::TextEditor::backgroundColourId, kBackground);
+        field->setColour(juce::TextEditor::textColourId, kText);
+        field->setColour(juce::TextEditor::outlineColourId, kEdge);
+        field->setColour(juce::TextEditor::focusedOutlineColourId, kMint);
+        addAndMakeVisible(field);
+    }
+    search_.setComponentID("presetSearch");
+    name_.setComponentID("presetName");
+    list_.setComponentID("presetList");
+    search_.setTooltip("Show only presets whose names contain this text.");
+    name_.setTooltip("Type a name, then press Save for a new preset or Rename for the selected one.");
+    save_.setTooltip("Save the current settings as a user preset with this name.");
+    rename_.setTooltip("Give the selected user preset this name.");
+    remove_.setTooltip("Delete the selected user preset.");
+    favorite_.setTooltip("Mark or unmark the selected preset as a favorite.");
     search_.onTextChange = [this] { refresh(); };
-    addAndMakeVisible(search_);
+    name_.onTextChange = [this] {
+        disarm();
+        updateButtons();
+    };
 
     list_.setColour(juce::ListBox::backgroundColourId, kBackground);
     list_.setColour(juce::ListBox::outlineColourId, kEdge);
@@ -47,10 +64,17 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     }
 
     save_.onClick = [this] {
-        if (capture_ && library_.saveUser(search_.getText(), capture_())) {
+        const auto name = name_.getText().trim();
+        library_.rescan();
+        if (armed_ != &save_ && library_.hasUser(name)) {
+            arm(save_, "Replace?");
+            return;
+        }
+        disarm();
+        if (capture_ && library_.saveUser(name, capture_())) {
             refresh();
             if (onSaved) {
-                onSaved(search_.getText().trim());
+                onSaved(name);
             }
             if (onChanged) {
                 onChanged();
@@ -58,8 +82,9 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         }
     };
     rename_.onClick = [this] {
+        disarm();
         if (const auto* entry = selected()) {
-            if (!entry->factory && library_.renameUser(entry->name, search_.getText())) {
+            if (!entry->factory && library_.renameUser(entry->name, name_.getText())) {
                 refresh();
                 if (onChanged) {
                     onChanged();
@@ -68,16 +93,24 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         }
     };
     remove_.onClick = [this] {
-        if (const auto* entry = selected()) {
-            if (library_.deleteUser(entry->name)) {
-                refresh();
-                if (onChanged) {
-                    onChanged();
-                }
+        const auto* entry = selected();
+        if (entry == nullptr) {
+            return;
+        }
+        if (armed_ != &remove_) {
+            arm(remove_, "Delete?");
+            return;
+        }
+        disarm();
+        if (library_.deleteUser(entry->name)) {
+            refresh();
+            if (onChanged) {
+                onChanged();
             }
         }
     };
     favorite_.onClick = [this] {
+        disarm();
         if (const auto* entry = selected()) {
             library_.setFavorite(entry->name, entry->factory, !entry->favorite);
             refresh();
@@ -88,17 +121,20 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     refresh();
 }
 
+// Keeps the selection on the same preset. A preset the filter hides is deselected,
+// so Rename and Delete never act on whatever row takes its index.
 void PresetBrowser::refresh() {
-    const auto selectedName = selected() != nullptr ? selected()->name : juce::String();
-    const bool selectedFactory = selected() != nullptr && selected()->factory;
+    const auto* current = selected();
+    const auto selectedName = current != nullptr ? current->name : juce::String();
+    const bool selectedFactory = current != nullptr && current->factory;
     shown_ = library_.filtered(search_.getText());
     list_.updateContent();
-    for (int row = 0; row < static_cast<int>(shown_.size()); ++row) {
-        if (shown_[static_cast<size_t>(row)].name == selectedName
-            && shown_[static_cast<size_t>(row)].factory == selectedFactory) {
-            list_.selectRow(row);
-            break;
-        }
+    const auto kept = std::find_if(shown_.begin(), shown_.end(), [&](const PresetEntry& entry) {
+        return entry.name == selectedName && entry.factory == selectedFactory;
+    });
+    list_.deselectAllRows();
+    if (kept != shown_.end()) {
+        list_.selectRow(static_cast<int>(kept - shown_.begin()));
     }
     updateButtons();
     repaint();
@@ -118,6 +154,8 @@ void PresetBrowser::resized() {
     rename_.setBounds(buttons.removeFromLeft(width).reduced(2, 0));
     remove_.setBounds(buttons.removeFromLeft(width).reduced(2, 0));
     favorite_.setBounds(buttons.reduced(2, 0));
+    area.removeFromBottom(6);
+    name_.setBounds(area.removeFromBottom(28));
     area.removeFromBottom(6);
     list_.setBounds(area);
 }
@@ -148,17 +186,42 @@ void PresetBrowser::listBoxItemDoubleClicked(int row, const juce::MouseEvent&) {
 }
 
 void PresetBrowser::selectedRowsChanged(int) {
+    disarm();
     updateButtons();
+}
+
+void PresetBrowser::timerCallback() {
+    disarm();
+}
+
+// The first click on Save over a user preset, or on Delete, shows a question for 3 s.
+// A second click in that time commits.
+void PresetBrowser::arm(juce::TextButton& button, const juce::String& question) {
+    disarm();
+    armed_ = &button;
+    armedText_ = button.getButtonText();
+    button.setButtonText(question);
+    startTimer(3000);
+}
+
+void PresetBrowser::disarm() {
+    stopTimer();
+    if (armed_ == nullptr) {
+        return;
+    }
+    armed_->setButtonText(armedText_);
+    armed_ = nullptr;
 }
 
 void PresetBrowser::updateButtons() {
     const auto* entry = selected();
     const bool user = entry != nullptr && !entry->factory;
-    rename_.setEnabled(user && search_.getText().trim().isNotEmpty());
+    const auto name = name_.getText().trim();
+    rename_.setEnabled(user && name.isNotEmpty());
     remove_.setEnabled(user);
     favorite_.setEnabled(entry != nullptr);
     favorite_.setButtonText(entry != nullptr && entry->favorite ? "Unfavorite" : "Favorite");
-    save_.setEnabled(search_.getText().trim().isNotEmpty() && !library_.isFactoryName(search_.getText()));
+    save_.setEnabled(name.isNotEmpty() && !library_.isFactoryName(name));
 }
 
 void PresetBrowser::loadSelected() {

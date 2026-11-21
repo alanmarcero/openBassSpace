@@ -1137,6 +1137,98 @@ int main(int argc, char** argv) {
         stepDirectory.deleteRecursively();
     }
 
+    {
+        const auto browserDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                          .getChildFile("openBassSpace-browser-tests");
+        browserDirectory.deleteRecursively();
+        BassSpaceProcessor browsing;
+        browsing.setUserPresetDirectory(browserDirectory);
+        auto& browsingLibrary = browsing.presetLibrary();
+        browsingLibrary.saveUser("Alpha", browsing.currentParameterValues());
+        browsingLibrary.saveUser("Beta", browsing.currentParameterValues());
+        BassSpaceEditor browsingEditor(browsing);
+        dynamic_cast<juce::Button*>(findById(browsingEditor, "presetButton"))->triggerClick();
+        pump();
+        auto* panel = findById(browsingEditor, "presetBrowser");
+        auto* search = dynamic_cast<juce::TextEditor*>(findById(*panel, "presetSearch"));
+        auto* nameField = dynamic_cast<juce::TextEditor*>(findById(*panel, "presetName"));
+        auto* list = dynamic_cast<juce::ListBox*>(findById(*panel, "presetList"));
+        const auto button = [panel](const juce::String& text) {
+            const auto& children = panel->getChildren();
+            const auto found = std::find_if(children.begin(), children.end(), [&text](auto* child) {
+                auto* candidate = dynamic_cast<juce::Button*>(child);
+                return candidate != nullptr && candidate->getButtonText() == text;
+            });
+            require(found != children.end(), "browser button exists");
+            return dynamic_cast<juce::Button*>(*found);
+        };
+        auto* save = button("Save");
+        auto* rename = button("Rename");
+        auto* remove = button("Delete");
+        require(search != nullptr && nameField != nullptr && list != nullptr, "the browser has a search field, a name field and a list");
+        require(search->getTooltip().isNotEmpty() && nameField->getTooltip().isNotEmpty() && save->getTooltip().isNotEmpty()
+                    && rename->getTooltip().isNotEmpty() && remove->getTooltip().isNotEmpty()
+                    && button("Favorite")->getTooltip().isNotEmpty(),
+                "the browser's fields and buttons have tooltips");
+
+        const int alphaRow = static_cast<int>(browsingLibrary.factory().size());
+        list->selectRow(alphaRow);
+        search->setText("pha", true);
+        pump();
+        require(list->getSelectedRow() == 0 && list->getListBoxModel()->getNumRows() == 1,
+                "filtering keeps the selection on the same preset");
+        search->setText("Bet", true);
+        pump();
+        require(list->getSelectedRow() < 0 && !rename->isEnabled() && !remove->isEnabled(),
+                "a preset the filter hides is deselected, so Rename cannot reach another preset");
+
+        search->setText("", true);
+        pump();
+        list->selectRow(alphaRow);
+        nameField->setText("Gamma", true);
+        pump();
+        rename->triggerClick();
+        pump();
+        require(browsingLibrary.hasUser("Gamma") && !browsingLibrary.hasUser("Alpha") && browsingLibrary.hasUser("Beta"),
+                "Rename takes its name from the name field and renames the selected preset");
+
+        const auto storedWidth = [&browsingLibrary](const juce::String& name) {
+            const auto& user = browsingLibrary.user();
+            const auto entry = std::find_if(user.begin(), user.end(), [&name](const auto& candidate) { return candidate.name == name; });
+            require(entry != user.end(), "the stored preset exists");
+            const auto value = std::find_if(entry->values.begin(), entry->values.end(), [](const auto& pair) { return pair.first == "width"; });
+            return value->second;
+        };
+        auto* browsingWidth = browsing.parameters.getParameter("width");
+        browsingWidth->setValueNotifyingHost(browsingWidth->convertTo0to1(77.0f));
+        nameField->setText("Beta", true);
+        pump();
+        save->triggerClick();
+        pump();
+        require(save->getButtonText() == "Replace?" && std::abs(storedWidth("Beta")) < 0.01f,
+                "Save over an existing preset asks Replace? and writes nothing yet");
+        save->triggerClick();
+        pump();
+        require(save->getButtonText() == "Save" && std::abs(storedWidth("Beta") - 77.0f) < 0.01f,
+                "a second click replaces the preset");
+        require(browsing.currentPresetName() == "Beta" && !browsing.isPresetEdited(), "saving names the preset and clears *");
+
+        list->selectRow(alphaRow);
+        remove->triggerClick();
+        pump();
+        require(remove->getButtonText() == "Delete?" && browsingLibrary.hasUser("Beta"),
+                "Delete asks Delete? and removes nothing yet");
+        list->selectRow(alphaRow + 1);
+        require(remove->getButtonText() == "Delete", "selecting another preset cancels the question");
+        list->selectRow(alphaRow);
+        remove->triggerClick();
+        pump();
+        remove->triggerClick();
+        pump();
+        require(!browsingLibrary.hasUser("Beta") && browsingLibrary.hasUser("Gamma"), "a second click deletes the selected preset");
+        browserDirectory.deleteRecursively();
+    }
+
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;

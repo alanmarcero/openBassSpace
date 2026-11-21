@@ -22,7 +22,7 @@ struct SuiteActions {
     std::function<void()> nextPreset;
 };
 
-class PresetBrowser : public juce::Component, private juce::ListBoxModel {
+class PresetBrowser : public juce::Component, private juce::ListBoxModel, private juce::Timer {
 public:
     PresetBrowser(PresetLibrary& library,
                   std::function<ParameterSnapshot()> capture,
@@ -40,7 +40,10 @@ private:
     void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool selected) override;
     void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override;
     void selectedRowsChanged(int lastRowSelected) override;
+    void timerCallback() override;
 
+    void arm(juce::TextButton& button, const juce::String& question);
+    void disarm();
     void updateButtons();
     void loadSelected();
     [[nodiscard]] const PresetEntry* selected() const;
@@ -50,11 +53,14 @@ private:
     std::function<void(const PresetEntry&)> load_;
     std::vector<PresetEntry> shown_;
     juce::TextEditor search_;
+    juce::TextEditor name_;
     juce::ListBox list_{"presets", this};
     juce::TextButton save_{"Save"};
     juce::TextButton rename_{"Rename"};
     juce::TextButton remove_{"Delete"};
     juce::TextButton favorite_{"Favorite"};
+    juce::TextButton* armed_ = nullptr;
+    juce::String armedText_;
 };
 
 // Compact undo, A/B, bypass, and preset controls. Colours match the openBassSpace faceplate.
