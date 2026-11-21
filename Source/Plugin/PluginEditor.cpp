@@ -19,18 +19,6 @@ constexpr int kNameHeight = 16;
 constexpr int kValueHeight = 20;
 constexpr int kKnobMargin = 6;
 
-void drawGlow(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour colour) {
-    const juce::Graphics::ScopedSaveState saved(g);
-    const auto centre = bounds.getCentre();
-    const float radius = bounds.getWidth() * 0.5f;
-    if (radius <= 1.0f) {
-        return;
-    }
-    g.addTransform(juce::AffineTransform::scale(1.0f, bounds.getHeight() / bounds.getWidth(), centre.x, centre.y));
-    g.setGradientFill(juce::ColourGradient(colour, centre, colour.withAlpha(0.0f), centre.translated(radius, 0.0f), true));
-    g.fillEllipse(centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f);
-}
-
 juce::Colour widthColour(float percent) {
     if (percent < 10.0f) {
         return kAccentMint;
@@ -288,7 +276,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     setResizable(true, true);
     setResizeLimits(BassSpaceProcessor::minEditorWidth, BassSpaceProcessor::minEditorHeight, 1800, 1400);
     setSize(savedWidth, savedHeight);
-    updateMeter();
+    refreshDisplay();
     startTimerHz(30);
 }
 
@@ -322,11 +310,24 @@ bool BassSpaceEditor::keyPressed(const juce::KeyPress& key) {
     return false;
 }
 
-void BassSpaceEditor::timerCallback() {
+void BassSpaceEditor::refreshDisplay() {
     updateMeter();
     suiteStrip_.refresh();
-    if (!ringArea_.isEmpty()) {
-        repaint(ringArea_.getUnion(meterArea_).getUnion(footerArea_));
+
+    const std::array<float, 6> field { processor_.artworkPhase(), processor_.currentWidth(), processor_.currentUpperWidth(),
+                                       processor_.currentFrequency(), processor_.currentStereoize(),
+                                       processor_.currentSoloLow() ? 1.0f : 0.0f };
+    if (field != lastField_) {
+        lastField_ = field;
+        repaint(ringArea_);
+    }
+
+    const auto slope = processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText();
+    const juce::String split = processor_.currentElliptical() ? "  |  Side-only split" : "";
+    const auto footer = "Slope " + slope + split + "  |  Velvet stereoize";
+    if (footer != footerText_) {
+        footerText_ = footer;
+        repaint(footerArea_);
     }
 }
 
@@ -350,6 +351,9 @@ void BassSpaceEditor::updateMeter() {
             }
             return hundredths < -0.005f ? kAccentGold : kAccentMint;
         }();
+        if (text != values[row]->getText()) {
+            repaint(meterArea_);
+        }
         values[row]->setText(text, juce::dontSendNotification);
         values[row]->setColour(juce::Label::textColourId, colour);
     }
@@ -365,7 +369,7 @@ void BassSpaceEditor::positionPresetBrowser() {
     presetBrowser_.setBounds(x, anchor.getBottom() + 4, browserWidth, height);
 }
 
-void BassSpaceEditor::paint(juce::Graphics& g) {
+void BassSpaceEditor::paintBackground(juce::Graphics& g) const {
     g.fillAll(kBackground);
 
     if (!faceplate_.isNull()) {
@@ -402,13 +406,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     g.setColour(kTextDim);
     g.drawText("v" JucePlugin_VersionString, headerArea_, juce::Justification::centredRight);
 
-    if (fieldArea_.isEmpty()) {
-        return;
-    }
-
     const auto centerArea = fieldArea_.toFloat();
-    const auto fieldAccent = (processor_.currentUpperWidth() > 105.0f ? kAccentGold : kAccentMint);
-    drawGlow(g, centerArea, fieldAccent.withAlpha(0.07f));
     g.setColour(kPanel);
     g.fillRoundedRectangle(centerArea, 5.0f);
     g.setColour(kPanelEdge);
@@ -417,6 +415,33 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
     g.setColour(kTextDim);
     g.drawText("STEREO FIELD", ringArea_.withHeight(16), juce::Justification::centred);
+
+    if (!masterArea_.isEmpty()) {
+        const auto masterStrip = masterArea_.toFloat();
+        g.setColour(kPanel.withAlpha(0.78f));
+        g.fillRoundedRectangle(masterStrip, 5.0f);
+        g.setColour(kPanelEdge.withAlpha(0.9f));
+        g.drawRoundedRectangle(masterStrip, 5.0f, 1.0f);
+        g.setColour(kAccentMint.withAlpha(0.58f));
+        g.fillRoundedRectangle(masterStrip.withHeight(2.0f).reduced(1.0f, 0.0f), 1.0f);
+    }
+}
+
+void BassSpaceEditor::paint(juce::Graphics& g) {
+    // The faceplate and panels render once per size, at the display's pixel scale.
+    const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    const int imageWidth = juce::roundToInt(scale * static_cast<float>(getWidth()));
+    if (background_.getWidth() != imageWidth) {
+        background_ = juce::Image(juce::Image::RGB, imageWidth, juce::roundToInt(scale * static_cast<float>(getHeight())), false);
+        juce::Graphics backdrop(background_);
+        backdrop.addTransform(juce::AffineTransform::scale(scale));
+        paintBackground(backdrop);
+    }
+    g.drawImage(background_, getLocalBounds().toFloat());
+
+    if (fieldArea_.isEmpty()) {
+        return;
+    }
 
     const auto arcCentre = ringArea_.toFloat().getCentre().translated(
         0.0f, static_cast<float>(ringArea_.getHeight()) * 0.08f);
@@ -512,22 +537,9 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         g.drawText(text, juce::Rectangle<float>(24.0f, 12.0f).withCentre(under), juce::Justification::centred);
     }
 
-    if (!masterArea_.isEmpty()) {
-        const auto masterStrip = masterArea_.toFloat();
-        g.setColour(kPanel.withAlpha(0.78f));
-        g.fillRoundedRectangle(masterStrip, 5.0f);
-        g.setColour(kPanelEdge.withAlpha(0.9f));
-        g.drawRoundedRectangle(masterStrip, 5.0f, 1.0f);
-        g.setColour(kAccentMint.withAlpha(0.58f));
-        g.fillRoundedRectangle(masterStrip.withHeight(2.0f).reduced(1.0f, 0.0f), 1.0f);
-    }
-
     g.setFont(juce::FontOptions(11.0f));
     g.setColour(kTextDim);
-    const auto slope = processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText();
-    const juce::String split = processor_.currentElliptical() ? "  |  Side-only split" : "";
-    g.drawText("Slope " + slope + split + "  |  Velvet stereoize",
-               footerArea_, juce::Justification::centred);
+    g.drawText(footerText_, footerArea_, juce::Justification::centred);
 }
 
 void BassSpaceEditor::resized() {
@@ -541,6 +553,7 @@ void BassSpaceEditor::resized() {
     }
 
     processor_.setEditorSize(getWidth(), getHeight());
+    background_ = {};
 
     auto area = getLocalBounds().reduced(12, 8);
     headerArea_ = area.removeFromTop(32);

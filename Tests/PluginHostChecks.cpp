@@ -1,3 +1,4 @@
+#include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <algorithm>
@@ -122,6 +123,21 @@ static int changedPixels(const juce::Image& before, const juce::Image& after) {
     }
     return changed;
 }
+
+// Records each area the editor asks to repaint.
+struct RepaintRecorder final : juce::CachedComponentImage {
+    juce::RectangleList<int> dirty;
+    void paint(juce::Graphics&) override {}
+    bool invalidateAll() override {
+        dirty.add({ 0, 0, 1 << 16, 1 << 16 });
+        return true;
+    }
+    bool invalidate(const juce::Rectangle<int>& area) override {
+        dirty.add(area);
+        return true;
+    }
+    void releaseResources() override {}
+};
 
 static void checkLayout(juce::Component& editor, const juce::String& when) {
     const auto overlap = overlappingChildren(editor);
@@ -946,6 +962,49 @@ int main(int argc, char** argv) {
         field.setCurrentProgram(3);
         const auto flat = fieldEditor->createComponentSnapshot(wingsArea);
         require(changedPixels(monoBass, flat) > 30, "the stereo field draws the bass band, so Flat differs from mono bass");
+    }
+
+    {
+        BassSpaceProcessor idle;
+        idle.prepareToPlay(48000, 512);
+        BassSpaceEditor idleEditor(idle);
+        idleEditor.setVisible(true);
+        auto* recorder = new RepaintRecorder();
+        idleEditor.setCachedComponentImage(recorder);
+        recorder->dirty.clear();
+        idleEditor.refreshDisplay();
+        require(recorder->dirty.isEmpty(), "a frame with the transport stopped repaints nothing");
+
+        struct PlayingHost : juce::AudioPlayHead {
+            juce::Optional<PositionInfo> getPosition() const override {
+                PositionInfo position;
+                position.setIsPlaying(true);
+                position.setBpm(120.0);
+                position.setPpqPosition(0.3);
+                return position;
+            }
+        } playing;
+        idle.setPlayHead(&playing);
+        juce::AudioBuffer<float> silentBlock(2, 512);
+        silentBlock.clear();
+        juce::MidiBuffer noEvents;
+        idle.processBlock(silentBlock, noEvents);
+        idle.setPlayHead(nullptr);
+        idleEditor.refreshDisplay();
+        auto* ring = findById(idleEditor, "stereoField");
+        require(!recorder->dirty.isEmpty() && ring->getBounds().contains(recorder->dirty.getBounds()),
+                "a beat repaints only the stereo field");
+
+        recorder->dirty.clear();
+        auto* slopeParameter = idle.parameters.getParameter("slope");
+        slopeParameter->setValueNotifyingHost(1.0f);
+        pump();
+        idleEditor.refreshDisplay();
+        const auto& children = idleEditor.getChildren();
+        const bool touchesDial = std::any_of(children.begin(), children.end(), [recorder](auto* child) {
+            return dynamic_cast<juce::Slider*>(child) != nullptr && recorder->dirty.intersectsRectangle(child->getBounds());
+        });
+        require(!recorder->dirty.isEmpty() && !touchesDial, "a slope change repaints its button and the footer, not the dials");
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString

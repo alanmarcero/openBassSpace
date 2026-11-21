@@ -35,9 +35,13 @@ public:
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
 
+    // Reads the processor and repaints only the areas whose content changed.
+    void refreshDisplay();
+
 private:
-    void timerCallback() override;
+    void timerCallback() override { refreshDisplay(); }
     void updateMeter();
+    void paintBackground(juce::Graphics& g) const;
     void positionPresetBrowser();
 
     BassSpaceProcessor& processor_;
@@ -82,6 +86,9 @@ private:
 
     std::unique_ptr<juce::Drawable> stereoField_;
     juce::Image faceplate_;
+    juce::Image background_;
+    std::array<float, 6> lastField_ {};
+    juce::String footerText_;
 
     juce::Rectangle<int> headerArea_;
     juce::Rectangle<int> badgeArea_;
