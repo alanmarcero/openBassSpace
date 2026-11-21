@@ -49,6 +49,9 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     save_.onClick = [this] {
         if (capture_ && library_.saveUser(search_.getText(), capture_())) {
             refresh();
+            if (onSaved) {
+                onSaved(search_.getText().trim());
+            }
             if (onChanged) {
                 onChanged();
             }
@@ -179,7 +182,7 @@ const PresetEntry* PresetBrowser::selected() const {
 
 SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::String& bypassParameterId) {
     for (auto* button : { &undoButton_, &redoButton_, &aButton_, &bButton_, &copyAtoB_, &copyBtoA_,
-                          &bypassButton_, &presetButton_ }) {
+                          &bypassButton_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         button->setMouseClickGrabsKeyboardFocus(false);
         addAndMakeVisible(button);
     }
@@ -192,6 +195,8 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     copyBtoA_.setComponentID("copyBtoA");
     bypassButton_.setComponentID("bypassButton");
     presetButton_.setComponentID("presetButton");
+    previousPreset_.setComponentID("previousPreset");
+    nextPreset_.setComponentID("nextPreset");
 
     undoButton_.setTooltip("Undo the last parameter change.");
     redoButton_.setTooltip("Redo the last undone parameter change.");
@@ -201,6 +206,10 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     copyBtoA_.setTooltip("Copy slot B onto slot A.");
     bypassButton_.setTooltip("Bypass the plug-in with a short crossfade.");
     presetButton_.setTooltip("Factory and user presets.");
+    previousPreset_.setTooltip("Previous preset");
+    nextPreset_.setTooltip("Next preset");
+    previousPreset_.setTitle("Previous preset");
+    nextPreset_.setTitle("Next preset");
 
     undoButton_.onClick = [this] { if (actions_.undo) actions_.undo(); refresh(); };
     redoButton_.onClick = [this] { if (actions_.redo) actions_.redo(); refresh(); };
@@ -209,6 +218,8 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     copyAtoB_.onClick = [this] { if (actions_.copyAtoB) actions_.copyAtoB(); refresh(); };
     copyBtoA_.onClick = [this] { if (actions_.copyBtoA) actions_.copyBtoA(); refresh(); };
     presetButton_.onClick = [this] { if (actions_.togglePresetBrowser) actions_.togglePresetBrowser(); };
+    previousPreset_.onClick = [this] { if (actions_.previousPreset) actions_.previousPreset(); refresh(); };
+    nextPreset_.onClick = [this] { if (actions_.nextPreset) actions_.nextPreset(); refresh(); };
 
     bypassButton_.setClickingTogglesState(true);
     bypassAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -226,7 +237,7 @@ void SuiteStrip::refresh() {
     styleButton(aButton_, !slotB);
     styleButton(bButton_, slotB);
     styleButton(bypassButton_, bypassButton_.getToggleState());
-    for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_ }) {
+    for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         styleButton(*button, false);
     }
     undoButton_.setEnabled(!actions_.canUndo || actions_.canUndo());
@@ -255,6 +266,10 @@ void SuiteStrip::resized() {
     row.removeFromLeft(8);
     bypassButton_.setBounds(row.removeFromLeft(68));
     row.removeFromLeft(8);
+    previousPreset_.setBounds(row.removeFromLeft(40));
+    row.removeFromLeft(4);
+    nextPreset_.setBounds(row.removeFromRight(40));
+    row.removeFromRight(4);
     presetButton_.setBounds(row);
 }
 

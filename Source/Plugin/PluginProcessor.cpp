@@ -1,13 +1,16 @@
 #include "PluginProcessor.h"
 #include "FactoryPresets.h"
 #include "PluginEditor.h"
+#include <algorithm>
 #include <cmath>
 
 namespace {
 
-juce::ValueTree slotTree(int index, const alanmarcero::suite::ParameterSnapshot& values) {
-    auto tree = alanmarcero::suite::snapshotToTree("Slot", values);
+juce::ValueTree slotTree(int index, const CompareSlot& slot) {
+    auto tree = alanmarcero::suite::snapshotToTree("Slot", slot.values);
     tree.setProperty("index", index, nullptr);
+    tree.setProperty("presetName", slot.presetName, nullptr);
+    tree.setProperty("presetEdited", slot.presetEdited, nullptr);
     return tree;
 }
 
@@ -41,11 +44,28 @@ BassSpaceProcessor::BassSpaceProcessor()
     bypassParam_ = parameters.getRawParameterValue(bass_space::params::kBypass);
     slopeParam_ = parameters.getRawParameterValue(bass_space::params::kSlope);
     ellipticalParam_ = parameters.getRawParameterValue(bass_space::params::kElliptical);
+    bypassIndex_ = getBypassParameter()->getParameterIndex();
+    for (auto* parameter : getParameters()) {
+        parameter->addListener(this);
+    }
 
     currentProgram_ = 0;
     currentPresetName_ = bass_space::factoryPresets().front().name;
-    slots_[0] = currentParameterValues();
+    slots_[0] = captureSlot();
     slots_[1] = slots_[0];
+}
+
+BassSpaceProcessor::~BassSpaceProcessor() {
+    for (auto* parameter : getParameters()) {
+        parameter->removeListener(this);
+    }
+}
+
+// Host automation counts as an edit. Bypass and values the plug-in applies itself do not.
+void BassSpaceProcessor::parameterValueChanged(int parameterIndex, float) {
+    if (parameterIndex != bypassIndex_ && !applyingValues_.load(std::memory_order_relaxed)) {
+        presetEdited_.store(true, std::memory_order_relaxed);
+    }
 }
 
 void BassSpaceProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
@@ -237,10 +257,13 @@ void BassSpaceProcessor::selectCompareSlot(int slot) {
         return;
     }
 
-    slots_[static_cast<size_t>(activeSlot_)] = currentParameterValues();
+    slots_[static_cast<size_t>(activeSlot_)] = captureSlot();
     activeSlot_ = slot;
     history_.selectSlot(slot);
-    applyValues(slots_[static_cast<size_t>(slot)]);
+    const auto& next = slots_[static_cast<size_t>(slot)];
+    applyValues(next.values);
+    currentPresetName_ = next.presetName;
+    presetEdited_.store(next.presetEdited, std::memory_order_relaxed);
 }
 
 void BassSpaceProcessor::copyCompareSlot(int from, int to) {
@@ -249,12 +272,15 @@ void BassSpaceProcessor::copyCompareSlot(int from, int to) {
     }
 
     if (from == activeSlot_) {
-        slots_[static_cast<size_t>(from)] = currentParameterValues();
+        slots_[static_cast<size_t>(from)] = captureSlot();
     }
     slots_[static_cast<size_t>(to)] = slots_[static_cast<size_t>(from)];
     history_.clearSlot(to);
     if (to == activeSlot_) {
-        applyValues(slots_[static_cast<size_t>(to)]);
+        const auto& copied = slots_[static_cast<size_t>(to)];
+        applyValues(copied.values);
+        currentPresetName_ = copied.presetName;
+        presetEdited_.store(copied.presetEdited, std::memory_order_relaxed);
     }
 }
 
@@ -262,6 +288,7 @@ void BassSpaceProcessor::loadPreset(const alanmarcero::suite::PresetEntry& prese
     history_.performMutation("Preset", [this, preset] {
         applyValues(preset.values);
         currentPresetName_ = preset.name;
+        presetEdited_.store(false, std::memory_order_relaxed);
         if (!preset.factory) {
             return;
         }
@@ -273,6 +300,24 @@ void BassSpaceProcessor::loadPreset(const alanmarcero::suite::PresetEntry& prese
             }
         }
     });
+}
+
+void BassSpaceProcessor::markPresetSaved(const juce::String& name) {
+    currentPresetName_ = name;
+    presetEdited_.store(false, std::memory_order_relaxed);
+}
+
+void BassSpaceProcessor::stepPreset(int delta) {
+    presets_.rescan();
+    const auto list = presets_.filtered({});
+    const auto current = std::find_if(list.begin(), list.end(), [this](const alanmarcero::suite::PresetEntry& entry) {
+        return entry.name.equalsIgnoreCase(currentPresetName_);
+    });
+    // A name missing from the list steps forward to the first preset or back to the last.
+    const int fallback = delta > 0 ? -1 : 0;
+    const int position = current == list.end() ? fallback : static_cast<int>(current - list.begin());
+    const int count = static_cast<int>(list.size());
+    loadPreset(list[static_cast<size_t>((position + delta + count) % count)]);
 }
 
 void BassSpaceProcessor::setUserPresetDirectory(const juce::File& directory) {
@@ -290,6 +335,7 @@ alanmarcero::suite::ParameterSnapshot BassSpaceProcessor::currentParameterValues
 }
 
 void BassSpaceProcessor::applyValues(const alanmarcero::suite::ParameterSnapshot& values) {
+    applyingValues_.store(true, std::memory_order_relaxed);
     for (const auto& [id, value] : values) {
         if (auto* parameter = parameters.getParameter(id)) {
             const float normalised = parameter->convertTo0to1(value);
@@ -298,12 +344,18 @@ void BassSpaceProcessor::applyValues(const alanmarcero::suite::ParameterSnapshot
             }
         }
     }
+    applyingValues_.store(false, std::memory_order_relaxed);
+}
+
+CompareSlot BassSpaceProcessor::captureSlot() const {
+    return { currentParameterValues(), currentPresetName_, isPresetEdited() };
 }
 
 juce::ValueTree BassSpaceProcessor::captureMemory() const {
     juce::ValueTree memory("SuiteMemory");
     memory.setProperty("program", currentProgram_, nullptr);
     memory.setProperty("presetName", currentPresetName_, nullptr);
+    memory.setProperty("presetEdited", isPresetEdited(), nullptr);
     memory.appendChild(alanmarcero::suite::snapshotToTree("Params", currentParameterValues()), nullptr);
     return memory;
 }
@@ -314,10 +366,11 @@ void BassSpaceProcessor::restoreMemory(const juce::ValueTree& memory) {
     if (auto params = memory.getChildWithName("Params"); params.isValid()) {
         applyValues(alanmarcero::suite::snapshotFromTree(params));
     }
+    presetEdited_.store(memory.getProperty("presetEdited", false), std::memory_order_relaxed);
 }
 
 void BassSpaceProcessor::getStateInformation(juce::MemoryBlock& destination) {
-    slots_[static_cast<size_t>(activeSlot_)] = currentParameterValues();
+    slots_[static_cast<size_t>(activeSlot_)] = captureSlot();
 
     juce::XmlElement root("OpenBassSpaceState");
     root.setAttribute("editorWidth", editorWidth_);
@@ -325,6 +378,7 @@ void BassSpaceProcessor::getStateInformation(juce::MemoryBlock& destination) {
     root.setAttribute("activeSlot", activeSlot_);
     root.setAttribute("currentProgram", currentProgram_);
     root.setAttribute("presetName", currentPresetName_);
+    root.setAttribute("presetEdited", isPresetEdited());
     if (auto parameterXml = parameters.copyState().createXml()) {
         root.addChildElement(parameterXml.release());
     }
@@ -367,11 +421,12 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
 
     if (xmlState->hasTagName(parameters.state.getType())) {
         restoreParameterTree(juce::ValueTree::fromXml(*xmlState));
-        slots_[0] = currentParameterValues();
-        slots_[1] = slots_[0];
         activeSlot_ = 0;
         currentProgram_ = 0;
         currentPresetName_ = getProgramName(0);
+        presetEdited_.store(false, std::memory_order_relaxed);
+        slots_[0] = captureSlot();
+        slots_[1] = slots_[0];
         history_.clear();
         history_.selectSlot(activeSlot_);
         return;
@@ -390,8 +445,9 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
     activeSlot_ = juce::jlimit(0, 1, xmlState->getIntAttribute("activeSlot", 0));
     currentProgram_ = juce::jlimit(0, getNumPrograms() - 1, xmlState->getIntAttribute("currentProgram", 0));
     currentPresetName_ = xmlState->getStringAttribute("presetName", getProgramName(currentProgram_));
+    presetEdited_.store(xmlState->getBoolAttribute("presetEdited"), std::memory_order_relaxed);
 
-    slots_[0] = currentParameterValues();
+    slots_[0] = captureSlot();
     slots_[1] = slots_[0];
     for (auto* child = xmlState->getFirstChildElement(); child != nullptr; child = child->getNextElement()) {
         if (!child->hasTagName("Slot")) {
@@ -400,7 +456,8 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
         const int index = juce::jlimit(0, 1, child->getIntAttribute("index"));
         auto values = snapshotFromSlot(juce::ValueTree::fromXml(*child));
         if (!values.empty()) {
-            slots_[static_cast<size_t>(index)] = std::move(values);
+            slots_[static_cast<size_t>(index)] = { std::move(values), child->getStringAttribute("presetName", currentPresetName_),
+                                                    child->getBoolAttribute("presetEdited") };
         }
     }
 

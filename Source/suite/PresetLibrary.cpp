@@ -235,7 +235,9 @@ bool PresetLibrary::deleteUser(const juce::String& name) {
     return findUser(trimmed) == nullptr;
 }
 
+// Rescans first, so the favorites file keeps changes made by other plug-in instances.
 bool PresetLibrary::setFavorite(const juce::String& name, bool factory, bool favorite) {
+    rescan();
     auto* entry = findEntry(name, factory);
     if (entry == nullptr) {
         return false;

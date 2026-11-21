@@ -9,7 +9,14 @@
 #include <array>
 #include <limits>
 
-class BassSpaceProcessor final : public juce::AudioProcessor {
+// One A/B slot: its parameter values and the preset they came from.
+struct CompareSlot {
+    alanmarcero::suite::ParameterSnapshot values;
+    juce::String presetName;
+    bool presetEdited = false;
+};
+
+class BassSpaceProcessor final : public juce::AudioProcessor, private juce::AudioProcessorParameter::Listener {
 public:
     static constexpr int minEditorWidth = 720;
     static constexpr int minEditorHeight = 520;
@@ -17,7 +24,7 @@ public:
     static constexpr int defaultEditorHeight = 620;
 
     BassSpaceProcessor();
-    ~BassSpaceProcessor() override = default;
+    ~BassSpaceProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -112,18 +119,25 @@ public:
 
     alanmarcero::suite::PresetLibrary& presetLibrary() noexcept { return presets_; }
     [[nodiscard]] const juce::String& currentPresetName() const noexcept { return currentPresetName_; }
+    [[nodiscard]] bool isPresetEdited() const noexcept { return presetEdited_.load(std::memory_order_relaxed); }
     void loadPreset(const alanmarcero::suite::PresetEntry& preset);
+    void markPresetSaved(const juce::String& name);
+    // Loads the preset before or after the current one in the browser's order, wrapping at the ends.
+    void stepPreset(int delta);
     [[nodiscard]] alanmarcero::suite::ParameterSnapshot currentParameterValues() const;
     void setUserPresetDirectory(const juce::File& directory);
 
     juce::AudioProcessorValueTreeState parameters;
 
 private:
+    void parameterValueChanged(int parameterIndex, float newValue) override;
+    void parameterGestureChanged(int, bool) override {}
     void processAudio(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi, bool forceBypass);
     void restoreParameterTree(juce::ValueTree tree);
     [[nodiscard]] juce::ValueTree captureMemory() const;
     void restoreMemory(const juce::ValueTree& memory);
     void applyValues(const alanmarcero::suite::ParameterSnapshot& values);
+    [[nodiscard]] CompareSlot captureSlot() const;
 
     std::atomic<float>* freqParam_ = nullptr;
     std::atomic<float>* widthParam_ = nullptr;
@@ -148,10 +162,13 @@ private:
     analog_master::core::StereoCeilingGuard outputCeilingGuard_;
 
     alanmarcero::suite::PresetLibrary presets_;
-    std::array<alanmarcero::suite::ParameterSnapshot, 2> slots_;
+    std::array<CompareSlot, 2> slots_;
     int activeSlot_ = 0;
     int currentProgram_ = 0;
     juce::String currentPresetName_;
+    std::atomic<bool> presetEdited_ { false };
+    std::atomic<bool> applyingValues_ { false };
+    int bypassIndex_ = -1;
     int editorWidth_ = defaultEditorWidth;
     int editorHeight_ = defaultEditorHeight;
     alanmarcero::suite::SuiteHistory history_;

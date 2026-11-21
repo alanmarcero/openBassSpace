@@ -379,8 +379,8 @@ int main(int argc, char** argv) {
             "A/B copy buttons are visible");
     require(findById(*editor, "bypassButton") != nullptr, "bypass button is visible");
     auto* presetButton = dynamic_cast<juce::Button*>(findById(*editor, "presetButton"));
-    require(presetButton != nullptr && presetButton->getButtonText() == "Mono under 120 Hz",
-            "factory preset name is visible");
+    require(presetButton != nullptr && presetButton->getButtonText() == "Mono under 120 Hz *",
+            "an edited factory preset shows its name and *");
     require(hasVisibleLabel(*editor, "Crossover"), "Crossover section label is visible");
     require(hasVisibleLabel(*editor, "Bass width"), "Bass width section label is visible");
     require(hasVisibleLabel(*editor, "Upper width"), "Upper-band width section label is visible");
@@ -1060,6 +1060,81 @@ int main(int argc, char** argv) {
         restoredWidth->endChangeGesture();
         restoredOnB.selectCompareSlot(0);
         require(!restoredOnB.canUndo(), "an edit in a restored slot B stays out of slot A's undo history");
+    }
+
+    {
+        const auto stepDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                       .getChildFile("openBassSpace-step-tests");
+        stepDirectory.deleteRecursively();
+        BassSpaceProcessor stepping;
+        stepping.setUserPresetDirectory(stepDirectory);
+        BassSpaceEditor steppingEditor(stepping);
+        auto* previous = dynamic_cast<juce::Button*>(findById(steppingEditor, "previousPreset"));
+        auto* next = dynamic_cast<juce::Button*>(findById(steppingEditor, "nextPreset"));
+        auto* shownName = dynamic_cast<juce::Button*>(findById(steppingEditor, "presetButton"));
+        require(previous != nullptr && next != nullptr && shownName != nullptr, "previous and next preset buttons exist");
+        require(previous->getWidth() >= 40 && previous->getHeight() >= 40 && next->getWidth() >= 40 && next->getHeight() >= 40
+                    && previous->getTooltip() == "Previous preset" && next->getTooltip() == "Next preset",
+                "previous and next are 40 px buttons with tooltips");
+        previous->triggerClick();
+        pump();
+        require(stepping.currentPresetName() == "Air tilt", "previous wraps from the first preset to the last");
+        next->triggerClick();
+        pump();
+        require(stepping.currentPresetName() == "Mono under 120 Hz", "next wraps from the last preset to the first");
+        next->triggerClick();
+        pump();
+        require(stepping.currentPresetName() == "Mono under 80 Hz", "next steps in the browser's order");
+
+        stepping.parameters.getParameter("bypass")->setValueNotifyingHost(1.0f);
+        stepping.parameters.getParameter("bypass")->setValueNotifyingHost(0.0f);
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 80 Hz", "bypass does not mark the preset edited");
+        auto* steppingWidth = stepping.parameters.getParameter("width");
+        steppingWidth->setValueNotifyingHost(steppingWidth->convertTo0to1(40.0f));
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 80 Hz *", "the first edit after a load appends *");
+        stepping.selectCompareSlot(1);
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 120 Hz", "slot B keeps its own preset name and marker");
+        stepping.selectCompareSlot(0);
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 80 Hz *", "slot A keeps its own preset name and marker");
+
+        juce::MemoryBlock markedState;
+        stepping.getStateInformation(markedState);
+        BassSpaceProcessor markedReopened;
+        markedReopened.setStateInformation(markedState.getData(), static_cast<int>(markedState.getSize()));
+        require(markedReopened.currentPresetName() == "Mono under 80 Hz" && markedReopened.isPresetEdited(),
+                "the session keeps the preset name and the edited marker");
+        markedReopened.selectCompareSlot(1);
+        require(markedReopened.currentPresetName() == "Mono under 120 Hz" && !markedReopened.isPresetEdited(),
+                "the session keeps slot B's preset name and marker");
+
+        next->triggerClick();
+        pump();
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 200 Hz", "loading a preset clears *");
+        stepping.undo();
+        steppingEditor.refreshDisplay();
+        require(shownName->getButtonText() == "Mono under 80 Hz *", "undo brings back the name and the marker");
+
+        BassSpaceProcessor otherInstance;
+        otherInstance.setUserPresetDirectory(stepDirectory);
+        require(otherInstance.presetLibrary().saveUser("Zed", otherInstance.currentParameterValues()),
+                "another instance saves a user preset");
+        stepping.setCurrentProgram(8);
+        next->triggerClick();
+        pump();
+        require(stepping.currentPresetName() == "Zed", "next reaches a preset that another instance saved");
+
+        otherInstance.presetLibrary().setFavorite("Flat", true, true);
+        stepping.presetLibrary().setFavorite("Zed", false, true);
+        otherInstance.presetLibrary().rescan();
+        const auto& factory = otherInstance.presetLibrary().factory();
+        require(std::any_of(factory.begin(), factory.end(), [](const auto& entry) { return entry.name == "Flat" && entry.favorite; }),
+                "a favorite set in one instance survives a favorite set in another");
+        stepDirectory.deleteRecursively();
     }
 
     std::cout << "openBassSpace v" << JucePlugin_VersionString

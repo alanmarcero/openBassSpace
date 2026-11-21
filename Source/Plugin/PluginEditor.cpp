@@ -254,6 +254,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         processor_.parameters, bass_space::params::kElliptical, ellipticalButton_);
 
     presetBrowser_.onChanged = [this] { suiteStrip_.refresh(); };
+    presetBrowser_.onSaved = [this](const juce::String& name) { processor_.markPresetSaved(name); };
     alanmarcero::suite::SuiteActions actions;
     actions.undo = [this] { processor_.undo(); suiteStrip_.refresh(); };
     actions.redo = [this] { processor_.redo(); suiteStrip_.refresh(); };
@@ -264,10 +265,13 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     actions.copyAtoB = [this] { processor_.copyCompareSlot(0, 1); };
     actions.copyBtoA = [this] { processor_.copyCompareSlot(1, 0); };
     actions.activeSlot = [this] { return processor_.activeCompareSlot(); };
-    actions.presetName = [this] { return processor_.currentPresetName(); };
+    actions.presetName = [this] { return processor_.currentPresetName() + (processor_.isPresetEdited() ? " *" : ""); };
+    actions.previousPreset = [this] { processor_.stepPreset(-1); };
+    actions.nextPreset = [this] { processor_.stepPreset(1); };
     actions.togglePresetBrowser = [this] {
         presetBrowser_.setVisible(!presetBrowser_.isVisible());
         if (presetBrowser_.isVisible()) {
+            processor_.presetLibrary().rescan();
             presetBrowser_.refresh();
             presetBrowser_.toFront(true);
             positionPresetBrowser();

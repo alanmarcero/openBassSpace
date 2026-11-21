@@ -18,6 +18,8 @@ struct SuiteActions {
     std::function<int()> activeSlot;
     std::function<juce::String()> presetName;
     std::function<void()> togglePresetBrowser;
+    std::function<void()> previousPreset;
+    std::function<void()> nextPreset;
 };
 
 class PresetBrowser : public juce::Component, private juce::ListBoxModel {
@@ -31,6 +33,7 @@ public:
     void resized() override;
 
     std::function<void()> onChanged;
+    std::function<void(const juce::String&)> onSaved;
 
 private:
     int getNumRows() override;
@@ -78,6 +81,8 @@ private:
     juce::TextButton copyBtoA_{"Copy B to A"};
     juce::TextButton bypassButton_{"Bypass"};
     juce::TextButton presetButton_{"Presets"};
+    juce::TextButton previousPreset_{"<"};
+    juce::TextButton nextPreset_{">"};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment_;
 };
 
