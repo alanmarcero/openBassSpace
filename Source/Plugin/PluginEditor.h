@@ -90,6 +90,7 @@ private:
     juce::Image background_;
     std::array<float, 6> lastField_ {};
     juce::String footerText_;
+    bool upperBandDimmed_ = false;
 
     juce::Rectangle<int> headerArea_;
     juce::Rectangle<int> badgeArea_;

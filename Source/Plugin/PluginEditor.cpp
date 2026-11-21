@@ -299,6 +299,20 @@ void BassSpaceEditor::refreshDisplay() {
     updateMeter();
     suiteStrip_.refresh();
 
+    // Solo bass mutes the upper band, so its dials draw dim and their tooltips say how to hear them.
+    const bool soloBass = processor_.currentSoloLow();
+    if (soloBass != upperBandDimmed_) {
+        upperBandDimmed_ = soloBass;
+        const juce::String soloHint = soloBass ? " Turn off Solo bass to hear it." : "";
+        for (auto* dial : { &upperWidthSlider_, &stereoizeSlider_, &upperTiltSlider_ }) {
+            dial->setAlpha(soloBass ? 0.4f : 1.0f);
+            dial->setTooltip(dial->getDescription() + soloHint);
+        }
+        for (auto* name : { &upperWidthLabel_, &stereoizeLabel_, &upperTiltLabel_ }) {
+            name->setAlpha(soloBass ? 0.4f : 1.0f);
+        }
+    }
+
     const std::array<float, 6> field { processor_.artworkPhase(), processor_.currentWidth(), processor_.currentUpperWidth(),
                                        processor_.currentFrequency(), processor_.currentStereoize(),
                                        processor_.currentSoloLow() ? 1.0f : 0.0f };
