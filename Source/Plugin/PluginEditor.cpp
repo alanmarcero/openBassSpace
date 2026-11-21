@@ -15,6 +15,9 @@ const juce::Colour kAccentGold{ 0xffffbe3b };
 const juce::Colour kTextWhite{ 0xffe6f0f5 };
 const juce::Colour kTextDim{ 0xffa3b6bf };
 const juce::Colour kPanelRule{ 0xff31434d };
+constexpr int kNameHeight = 16;
+constexpr int kValueHeight = 20;
+constexpr int kKnobMargin = 6;
 
 void drawGlow(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour colour) {
     const juce::Graphics::ScopedSaveState saved(g);
@@ -31,7 +34,10 @@ void drawGlow(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour col
 void configureKnob(juce::Slider& slider, juce::Colour fill, double doubleClickValue,
                    const juce::String& title, const juce::String& description, const juce::String& tooltip) {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 96, kValueHeight);
+    slider.setColour(juce::Slider::textBoxTextColourId, fill);
+    slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
     slider.setColour(juce::Slider::rotarySliderFillColourId, fill);
     slider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff22323c));
     slider.setColour(juce::Slider::thumbColourId, kTextWhite);
@@ -49,12 +55,6 @@ void configureName(juce::Label& label, const juce::String& text) {
     label.setColour(juce::Label::textColourId, kTextWhite);
 }
 
-void configureValue(juce::Label& label, juce::Colour colour) {
-    label.setJustificationType(juce::Justification::centred);
-    label.setFont(juce::FontOptions(15.0f, juce::Font::bold));
-    label.setColour(juce::Label::textColourId, colour);
-}
-
 void configureModeButton(juce::TextButton& button, juce::Colour activeColour,
                          const juce::String& title, const juce::String& description, const juce::String& tooltip) {
     button.setClickingTogglesState(true);
@@ -68,15 +68,20 @@ void configureModeButton(juce::TextButton& button, juce::Colour activeColour,
     button.setWantsKeyboardFocus(false);
 }
 
-void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slider, juce::Label& value) {
-    name.setBounds(cell.removeFromTop(16));
-    value.setBounds(cell.removeFromBottom(18));
-    const int available = juce::jmin(cell.getWidth(), cell.getHeight());
-    const int knob = juce::jlimit(48, available, available - 2);
-    slider.setBounds(cell.withSizeKeepingCentre(knob, knob));
+void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slider) {
+    const int dial = juce::jlimit(48, cell.getWidth(), cell.getHeight() - kNameHeight - kValueHeight - 2 * kKnobMargin);
+    auto group = cell.withSizeKeepingCentre(cell.getWidth(), kNameHeight + dial + kValueHeight);
+    name.setBounds(group.removeFromTop(kNameHeight));
+    slider.setBounds(group.withSizeKeepingCentre(dial, group.getHeight()));
 }
 
 } // namespace
+
+juce::Label* BassSpaceTheme::createSliderTextBox(juce::Slider& slider) {
+    auto* box = juce::LookAndFeel_V4::createSliderTextBox(slider);
+    box->setFont(juce::FontOptions(15.0f, juce::Font::bold));
+    return box;
+}
 
 BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     : AudioProcessorEditor(p),
@@ -92,7 +97,6 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     theme_.setColour(juce::TooltipWindow::backgroundColourId, kPanel);
     theme_.setColour(juce::TooltipWindow::textColourId, kTextWhite);
     theme_.setColour(juce::TooltipWindow::outlineColourId, kPanelRule);
-    setLookAndFeel(&theme_);
     faceplate_ = juce::ImageCache::getFromMemory(
         BinaryData::analogcyberfaceplate_png, BinaryData::analogcyberfaceplate_pngSize);
     stereoField_ = juce::Drawable::createFromImageData(BinaryData::stereofield_svg, BinaryData::stereofield_svgSize);
@@ -101,25 +105,21 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
                   "Sets the boundary between the bass and upper stereo width controls.",
                   "Set the boundary between Bass width and Upper width.");
     configureName(freqLabel_, "Crossover");
-    configureValue(freqValueLabel_, kAccentMint);
 
     configureKnob(widthSlider_, kAccentGold, 0.0, "Bass stereo width",
                   "Sets the stereo width below the crossover frequency.",
                   "Set the bass stereo width below the crossover frequency.");
     configureName(widthLabel_, "Bass width");
-    configureValue(widthValueLabel_, kAccentGold);
 
     configureKnob(upperWidthSlider_, kAccentGold, 100.0, "Upper-band width",
                   "Sets stereo width above the crossover frequency.",
                   "Set stereo width above the crossover frequency.");
     configureName(upperWidthLabel_, "Upper width");
-    configureValue(upperWidthValueLabel_, kAccentGold);
 
     configureKnob(stereoizeSlider_, kAccentMint, 0.0, "Stereoize",
                   "Adds a mono-compatible decorrelated side signal above the crossover.",
                   "Add a decorrelated side signal above the crossover. The bass remains centered.");
     configureName(stereoizeLabel_, "Stereoize");
-    configureValue(stereoizeValueLabel_, kAccentMint);
 
     correlationLabel_.setText("Correlation", juce::dontSendNotification);
     correlationLabel_.setJustificationType(juce::Justification::centredLeft);
@@ -134,19 +134,16 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
                   "Sets the plug-in output level in decibels.",
                   "Set the plug-in output level in decibels.");
     configureName(outputDbLabel_, "Output dB");
-    configureValue(outputDbValueLabel_, kAccentMint);
 
     configureKnob(subDriveSlider_, kAccentMint, 0.0, "Sub harmonic drive",
                   "Adds mono-locked sub-octave and harmonic warmth to the bass band.",
                   "Blend mono-locked sub-octave synthesis and ADAA saturation into the bass band.");
     configureName(subDriveLabel_, "Sub drive");
-    configureValue(subDriveValueLabel_, kAccentMint);
 
     configureKnob(upperTiltSlider_, kAccentGold, 0.0, "Upper air tilt",
                   "Tilts the upper stereo band brightness from -6 dB to +6 dB.",
                   "Tilt upper-band high frequencies (-6 dB dark to +6 dB air).");
     configureName(upperTiltLabel_, "Upper tilt");
-    configureValue(upperTiltValueLabel_, kAccentGold);
 
     configureModeButton(soloLowButton_, kAccentMint, "Solo bass band",
                         "Auditions only the low-frequency band below the crossover.",
@@ -159,14 +156,14 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
                         "Enable mastering Elliptical EQ topology for zero-phase-shift Mid transients.");
 
     for (auto* component : std::initializer_list<juce::Component*>{
-             &freqSlider_, &freqLabel_, &freqValueLabel_,
-             &widthSlider_, &widthLabel_, &widthValueLabel_,
-             &upperWidthSlider_, &upperWidthLabel_, &upperWidthValueLabel_,
-             &stereoizeSlider_, &stereoizeLabel_, &stereoizeValueLabel_,
+             &freqSlider_, &freqLabel_,
+             &widthSlider_, &widthLabel_,
+             &upperWidthSlider_, &upperWidthLabel_,
+             &stereoizeSlider_, &stereoizeLabel_,
              &correlationLabel_, &correlationValueLabel_,
-             &outputDbSlider_, &outputDbLabel_, &outputDbValueLabel_,
-             &subDriveSlider_, &subDriveLabel_, &subDriveValueLabel_,
-             &upperTiltSlider_, &upperTiltLabel_, &upperTiltValueLabel_,
+             &outputDbSlider_, &outputDbLabel_,
+             &subDriveSlider_, &subDriveLabel_,
+             &upperTiltSlider_, &upperTiltLabel_,
              &soloLowButton_, &slopeButton_, &ellipticalButton_, &suiteStrip_ }) {
         addAndMakeVisible(component);
     }
@@ -175,6 +172,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     stereoFieldAnchor_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(stereoFieldAnchor_);
     addChildComponent(presetBrowser_);
+    setLookAndFeel(&theme_);
 
     freqAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor_.parameters, bass_space::params::kFrequency, freqSlider_);
@@ -268,16 +266,7 @@ void BassSpaceEditor::timerCallback() {
 }
 
 void BassSpaceEditor::updateValueLabels() {
-    freqValueLabel_.setText(juce::String(juce::roundToInt(freqSlider_.getValue())) + " Hz", juce::dontSendNotification);
-    widthValueLabel_.setText(juce::String(juce::roundToInt(widthSlider_.getValue())) + "%", juce::dontSendNotification);
-    upperWidthValueLabel_.setText(juce::String(juce::roundToInt(upperWidthSlider_.getValue())) + "%", juce::dontSendNotification);
-    stereoizeValueLabel_.setText(juce::String(juce::roundToInt(stereoizeSlider_.getValue())) + "%", juce::dontSendNotification);
     correlationValueLabel_.setText(juce::String(processor_.currentCorrelation(), 2), juce::dontSendNotification);
-    subDriveValueLabel_.setText(juce::String(juce::roundToInt(subDriveSlider_.getValue())) + "%", juce::dontSendNotification);
-    outputDbValueLabel_.setText(juce::String(outputDbSlider_.getValue(), 1) + " dB", juce::dontSendNotification);
-    const double tiltVal = upperTiltSlider_.getValue();
-    upperTiltValueLabel_.setText((tiltVal > 0.05 ? "+" : "") + juce::String(std::abs(tiltVal) < 0.05 ? 0.0 : tiltVal, 1) + " dB",
-                                 juce::dontSendNotification);
 }
 
 void BassSpaceEditor::positionPresetBrowser() {
@@ -301,6 +290,10 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     g.fillRect(getLocalBounds().reduced(5));
     g.setColour(kPanelEdge);
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(3.0f), 5.0f, 1.2f);
+    g.setColour(kPanelRule);
+    for (const auto& divider : knobDividers_) {
+        g.drawLine(divider, 1.0f);
+    }
 
     g.setFont(juce::FontOptions(24.0f, juce::Font::bold));
     g.setColour(kTextWhite);
@@ -449,11 +442,15 @@ void BassSpaceEditor::resized() {
     auto left = area.removeFromLeft(side);
     auto right = area.removeFromRight(side);
     auto center = area.reduced(6, 0);
+    const auto divider = [](juce::Rectangle<int> column) {
+        return juce::Line<int>(column.getX() + 16, column.getCentreY(), column.getRight() - 16, column.getCentreY()).toFloat();
+    };
+    knobDividers_ = { divider(left), divider(right) };
 
-    placeKnob(left.removeFromTop(left.getHeight() / 2), freqLabel_, freqSlider_, freqValueLabel_);
-    placeKnob(left, stereoizeLabel_, stereoizeSlider_, stereoizeValueLabel_);
-    placeKnob(right.removeFromTop(right.getHeight() / 2), widthLabel_, widthSlider_, widthValueLabel_);
-    placeKnob(right, upperWidthLabel_, upperWidthSlider_, upperWidthValueLabel_);
+    placeKnob(left.removeFromTop(left.getHeight() / 2), freqLabel_, freqSlider_);
+    placeKnob(left, stereoizeLabel_, stereoizeSlider_);
+    placeKnob(right.removeFromTop(right.getHeight() / 2), widthLabel_, widthSlider_);
+    placeKnob(right, upperWidthLabel_, upperWidthSlider_);
 
     const int masterH = juce::jlimit(118, 176, center.getHeight() * 2 / 5);
     masterArea_ = center.removeFromBottom(masterH);
@@ -477,9 +474,9 @@ void BassSpaceEditor::resized() {
 
     auto cells = masterArea_.reduced(4, 6);
     const int cellW = cells.getWidth() / 4;
-    placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_, subDriveValueLabel_);
-    placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_, outputDbValueLabel_);
-    placeKnob(cells.removeFromLeft(cellW), upperTiltLabel_, upperTiltSlider_, upperTiltValueLabel_);
+    placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_);
+    placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_);
+    placeKnob(cells.removeFromLeft(cellW), upperTiltLabel_, upperTiltSlider_);
     const int buttonWidth = juce::jmin(124, juce::jmax(72, cells.getWidth() - 8));
     const int buttonHeight = juce::jlimit(24, 30, (cells.getHeight() - 10) / 3);
     const int totalStackHeight = buttonHeight * 3 + 8;

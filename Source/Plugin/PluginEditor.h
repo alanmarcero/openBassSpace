@@ -4,6 +4,11 @@
 #include "SuiteStrip.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
+class BassSpaceTheme final : public juce::LookAndFeel_V4 {
+public:
+    juce::Label* createSliderTextBox(juce::Slider& slider) override;
+};
+
 class BassSpaceEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit BassSpaceEditor(BassSpaceProcessor&);
@@ -19,7 +24,7 @@ private:
     void positionPresetBrowser();
 
     BassSpaceProcessor& processor_;
-    juce::LookAndFeel_V4 theme_;
+    BassSpaceTheme theme_;
     juce::TooltipWindow tooltips_ {this, 600};
     juce::Slider freqSlider_;
     juce::Slider widthSlider_;
@@ -39,14 +44,7 @@ private:
     juce::Label upperTiltLabel_;
     juce::Label correlationLabel_;
     juce::Label correlationValueLabel_;
-    juce::Label freqValueLabel_;
-    juce::Label widthValueLabel_;
-    juce::Label upperWidthValueLabel_;
-    juce::Label stereoizeValueLabel_;
-    juce::Label subDriveValueLabel_;
     juce::Label outputDbLabel_;
-    juce::Label outputDbValueLabel_;
-    juce::Label upperTiltValueLabel_;
 
     alanmarcero::suite::SuiteStrip suiteStrip_;
     alanmarcero::suite::PresetBrowser presetBrowser_;
@@ -73,6 +71,7 @@ private:
     juce::Rectangle<int> ringArea_;
     juce::Rectangle<int> masterArea_;
     juce::Rectangle<float> correlationTrack_;
+    std::array<juce::Line<float>, 2> knobDividers_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceEditor)
 };

@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 static void require(bool b, const char* message) {
     if (!b) {
@@ -27,11 +28,25 @@ static void save(juce::Component& c, const juce::String& path) {
 }
 
 static bool hasVisibleLabel(juce::Component& component, const juce::String& text) {
+    if (auto* label = dynamic_cast<juce::Label*>(&component);
+        label != nullptr && label->getText() == text && !label->getBounds().isEmpty()) {
+        return true;
+    }
     return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&text](auto* child) {
-        auto* label = dynamic_cast<juce::Label*>(child);
-        return label != nullptr && label->getText() == text && label->isVisible()
-            && !label->getBounds().isEmpty();
+        return child->isVisible() && hasVisibleLabel(*child, text);
     });
+}
+
+static juce::Label* findLabel(juce::Component& component, const juce::String& text) {
+    if (auto* label = dynamic_cast<juce::Label*>(&component); label != nullptr && label->getText() == text) {
+        return label;
+    }
+    for (auto* child : component.getChildren()) {
+        if (auto* found = findLabel(*child, text)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 static juce::Component* findById(juce::Component& component, const juce::String& id) {
@@ -46,11 +61,70 @@ static juce::Component* findById(juce::Component& component, const juce::String&
     return nullptr;
 }
 
-static bool hasSliderTitle(juce::Component& component, const juce::String& title) {
-    return std::any_of(component.getChildren().begin(), component.getChildren().end(), [&title](auto* child) {
+static juce::Slider* findSlider(juce::Component& component, const juce::String& title) {
+    const auto& children = component.getChildren();
+    const auto found = std::find_if(children.begin(), children.end(), [&title](auto* child) {
         auto* slider = dynamic_cast<juce::Slider*>(child);
         return slider != nullptr && slider->getTitle() == title;
     });
+    if (found == children.end()) {
+        return nullptr;
+    }
+    return dynamic_cast<juce::Slider*>(*found);
+}
+
+static juce::Rectangle<int> valueBoxIn(juce::Component& editor, juce::Slider& slider) {
+    const auto& parts = slider.getChildren();
+    const auto box = std::find_if(parts.begin(), parts.end(), [](auto* part) {
+        return dynamic_cast<juce::Label*>(part) != nullptr;
+    });
+    require(box != parts.end(), "slider shows its value box");
+    return editor.getLocalArea(&slider, (*box)->getBounds());
+}
+
+// Names the first two visible children whose bounds overlap, or returns an empty string.
+static juce::String overlappingChildren(juce::Component& parent) {
+    const auto describe = [](juce::Component* component) {
+        if (auto* label = dynamic_cast<juce::Label*>(component)) {
+            return label->getText();
+        }
+        return component->getTitle() + component->getComponentID();
+    };
+    const auto& children = parent.getChildren();
+    for (int first = 0; first < children.size(); ++first) {
+        for (int second = first + 1; second < children.size(); ++second) {
+            auto* a = children[first];
+            auto* b = children[second];
+            if (a->isVisible() && b->isVisible() && a->getBounds().intersects(b->getBounds())) {
+                return describe(a) + " overlaps " + describe(b);
+            }
+        }
+    }
+    return {};
+}
+
+static int smallestDial(juce::Component& parent) {
+    int smallest = std::numeric_limits<int>::max();
+    for (auto* child : parent.getChildren()) {
+        if (auto* slider = dynamic_cast<juce::Slider*>(child); slider != nullptr && slider->isVisible()) {
+            smallest = juce::jmin(smallest, slider->getWidth(), slider->getHeight() - slider->getTextBoxHeight());
+        }
+    }
+    return smallest;
+}
+
+static void checkLayout(juce::Component& editor, const juce::String& when) {
+    const auto overlap = overlappingChildren(editor);
+    require(overlap.isEmpty(), (when + ": " + overlap).toRawUTF8());
+    require(smallestDial(editor) >= 64, (when + ": every dial is at least 64 px").toRawUTF8());
+    const auto clearance = [&editor](const juce::String& upperTitle, const juce::String& lowerName) {
+        auto* upper = findSlider(editor, upperTitle);
+        auto* lower = findLabel(editor, lowerName);
+        require(upper != nullptr && lower != nullptr, "stacked knobs exist");
+        return lower->getY() - valueBoxIn(editor, *upper).getBottom();
+    };
+    require(clearance("Crossover frequency", "Stereoize") >= 12 && clearance("Bass stereo width", "Upper width") >= 12,
+            (when + ": each stacked value sits clear of the next knob's name").toRawUTF8());
 }
 
 // Factory-default editor at the default window size. The host-check path below
@@ -274,13 +348,14 @@ int main(int argc, char** argv) {
     require(hasVisibleLabel(*editor, "120 Hz"), "Crossover value includes frequency units");
     require(hasVisibleLabel(*editor, "0%"), "Stereo width value includes percent units");
     require(hasVisibleLabel(*editor, "0.0 dB"), "Output value includes decibel units");
-    require(hasSliderTitle(*editor, "Crossover frequency"), "Crossover control has an accessibility title");
-    require(hasSliderTitle(*editor, "Bass stereo width"), "Bass width control has an accessibility title");
-    require(hasSliderTitle(*editor, "Upper-band width"), "Upper-band width control has an accessibility title");
-    require(hasSliderTitle(*editor, "Stereoize"), "Stereoize control has an accessibility title");
-    require(hasSliderTitle(*editor, "Sub harmonic drive"), "Sub drive control has an accessibility title");
-    require(hasSliderTitle(*editor, "Upper air tilt"), "Upper tilt control has an accessibility title");
-    require(hasSliderTitle(*editor, "Output level"), "Output control has an accessibility title");
+    require(findSlider(*editor, "Crossover frequency") != nullptr, "Crossover control has an accessibility title");
+    require(findSlider(*editor, "Bass stereo width") != nullptr, "Bass width control has an accessibility title");
+    require(findSlider(*editor, "Upper-band width") != nullptr, "Upper-band width control has an accessibility title");
+    require(findSlider(*editor, "Stereoize") != nullptr, "Stereoize control has an accessibility title");
+    require(findSlider(*editor, "Sub harmonic drive") != nullptr, "Sub drive control has an accessibility title");
+    require(findSlider(*editor, "Upper air tilt") != nullptr, "Upper tilt control has an accessibility title");
+    require(findSlider(*editor, "Output level") != nullptr, "Output control has an accessibility title");
+    checkLayout(*editor, "default size");
 
     struct Host : juce::AudioPlayHead {
         PositionInfo position;
@@ -550,6 +625,7 @@ int main(int argc, char** argv) {
     require(editor->getWidth() >= BassSpaceProcessor::minEditorWidth
                 && editor->getHeight() >= BassSpaceProcessor::minEditorHeight,
             "editor enforces a readable minimum size");
+    checkLayout(*editor, "minimum size");
     editor->setSize(980, 700);
     require(editor->getWidth() == 980 && editor->getHeight() == 700, "editor accepts a free resize");
     auto* resizedReadout = dynamic_cast<juce::Label*>(findById(*editor, "correlationValue"));
