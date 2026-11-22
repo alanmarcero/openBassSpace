@@ -286,7 +286,7 @@ void BassSpaceProcessor::copyCompareSlot(int from, int to) {
 
 void BassSpaceProcessor::loadPreset(const alanmarcero::suite::PresetEntry& preset) {
     history_.performMutation("Preset", [this, preset] {
-        applyValues(preset.values);
+        applyValues(preset.values, true);
         currentPresetName_ = preset.name;
         presetEdited_.store(false, std::memory_order_relaxed);
         if (!preset.factory) {
@@ -324,6 +324,33 @@ void BassSpaceProcessor::setUserPresetDirectory(const juce::File& directory) {
     presets_.setDirectory(directory);
 }
 
+bool BassSpaceProcessor::isParamLocked(const juce::String& paramId) const {
+    std::lock_guard<std::mutex> lock(lockMutex_);
+    return lockedParams_.count(paramId) > 0;
+}
+
+void BassSpaceProcessor::setParamLocked(const juce::String& paramId, bool locked) {
+    if (locked && parameters.getParameter(paramId) == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(lockMutex_);
+    if (locked) {
+        lockedParams_.insert(paramId);
+    } else {
+        lockedParams_.erase(paramId);
+    }
+}
+
+void BassSpaceProcessor::unlockAllParams() {
+    std::lock_guard<std::mutex> lock(lockMutex_);
+    lockedParams_.clear();
+}
+
+bool BassSpaceProcessor::hasAnyLockedParams() const {
+    std::lock_guard<std::mutex> lock(lockMutex_);
+    return !lockedParams_.empty();
+}
+
 alanmarcero::suite::ParameterSnapshot BassSpaceProcessor::currentParameterValues() const {
     alanmarcero::suite::ParameterSnapshot values;
     for (auto* parameter : getParameters()) {
@@ -334,9 +361,12 @@ alanmarcero::suite::ParameterSnapshot BassSpaceProcessor::currentParameterValues
     return values;
 }
 
-void BassSpaceProcessor::applyValues(const alanmarcero::suite::ParameterSnapshot& values) {
+void BassSpaceProcessor::applyValues(const alanmarcero::suite::ParameterSnapshot& values, bool skipLocked) {
     applyingValues_.store(true, std::memory_order_relaxed);
     for (const auto& [id, value] : values) {
+        if (skipLocked && isParamLocked(id)) {
+            continue;
+        }
         if (auto* parameter = parameters.getParameter(id)) {
             const float normalised = parameter->convertTo0to1(value);
             if (std::abs(parameter->getValue() - normalised) > 1.0e-5f) {
@@ -386,6 +416,16 @@ void BassSpaceProcessor::getStateInformation(juce::MemoryBlock& destination) {
         auto xml = slotTree(slot, slots_[static_cast<size_t>(slot)]).createXml();
         root.addChildElement(xml.release());
     }
+    {
+        std::lock_guard<std::mutex> lock(lockMutex_);
+        if (!lockedParams_.empty()) {
+            auto* lockedXml = root.createNewChildElement("LockedParams");
+            for (const auto& id : lockedParams_) {
+                auto* entry = lockedXml->createNewChildElement("Param");
+                entry->setAttribute("id", id);
+            }
+        }
+    }
     copyXmlToBinary(root, destination);
 }
 
@@ -420,6 +460,7 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
     }
 
     if (xmlState->hasTagName(parameters.state.getType())) {
+        unlockAllParams();
         restoreParameterTree(juce::ValueTree::fromXml(*xmlState));
         activeSlot_ = 0;
         currentProgram_ = 0;
@@ -437,6 +478,15 @@ void BassSpaceProcessor::setStateInformation(const void* data, int sizeInBytes) 
 
     if (auto* parameterXml = xmlState->getChildByName(parameters.state.getType().toString())) {
         restoreParameterTree(juce::ValueTree::fromXml(*parameterXml));
+    }
+
+    unlockAllParams();
+    if (auto* lockedXml = xmlState->getChildByName("LockedParams")) {
+        for (auto* child = lockedXml->getFirstChildElement(); child != nullptr; child = child->getNextElement()) {
+            if (child->hasTagName("Param")) {
+                setParamLocked(child->getStringAttribute("id"), true);
+            }
+        }
     }
 
     editorWidth_ = juce::jlimit(minEditorWidth, 1800, xmlState->getIntAttribute("editorWidth", editorWidth_));

@@ -20,6 +20,24 @@ struct SuiteActions {
     std::function<void()> togglePresetBrowser;
     std::function<void()> previousPreset;
     std::function<void()> nextPreset;
+    std::function<bool()> isBypassLocked;
+    std::function<void(juce::Component&)> onBypassPopupMenu;
+};
+
+class PopupTextButton final : public juce::TextButton {
+public:
+    using juce::TextButton::TextButton;
+    std::function<void()> onPopupMenu;
+
+    void mouseDown(const juce::MouseEvent& e) override {
+        if (e.mods.isPopupMenu()) {
+            if (onPopupMenu) {
+                onPopupMenu();
+            }
+            return;
+        }
+        juce::TextButton::mouseDown(e);
+    }
 };
 
 class PresetBrowser : public juce::Component, private juce::ListBoxModel, private juce::Timer {
@@ -85,7 +103,7 @@ private:
     juce::TextButton bButton_{"B"};
     juce::TextButton copyAtoB_{"Copy A to B"};
     juce::TextButton copyBtoA_{"Copy B to A"};
-    juce::TextButton bypassButton_{"Bypass"};
+    PopupTextButton bypassButton_{"Bypass"};
     juce::TextButton presetButton_{"Presets"};
     juce::TextButton previousPreset_{"<"};
     juce::TextButton nextPreset_{">"};

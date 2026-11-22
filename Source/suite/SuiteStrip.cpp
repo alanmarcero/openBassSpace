@@ -250,8 +250,9 @@ const PresetEntry* PresetBrowser::selected() const {
 }
 
 SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::String& bypassParameterId) {
-    for (auto* button : { &undoButton_, &redoButton_, &aButton_, &bButton_, &copyAtoB_, &copyBtoA_,
-                          &bypassButton_, &presetButton_, &previousPreset_, &nextPreset_ }) {
+    for (juce::TextButton* button : std::initializer_list<juce::TextButton*>{
+             &undoButton_, &redoButton_, &aButton_, &bButton_, &copyAtoB_, &copyBtoA_,
+             &bypassButton_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         button->setMouseClickGrabsKeyboardFocus(false);
         addAndMakeVisible(button);
     }
@@ -279,7 +280,8 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     nextPreset_.setTooltip("Next preset");
     previousPreset_.setTitle("Previous preset");
     nextPreset_.setTitle("Next preset");
-    for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &bypassButton_ }) {
+    for (juce::TextButton* button : std::initializer_list<juce::TextButton*>{
+             &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &bypassButton_ }) {
         button->setTitle(button->getButtonText());
     }
     aButton_.setTitle("Slot A");
@@ -296,6 +298,11 @@ SuiteStrip::SuiteStrip(juce::AudioProcessorValueTreeState& state, const juce::St
     nextPreset_.onClick = [this] { if (actions_.nextPreset) actions_.nextPreset(); refresh(); };
 
     bypassButton_.setClickingTogglesState(true);
+    bypassButton_.onPopupMenu = [this] {
+        if (actions_.onBypassPopupMenu) {
+            actions_.onBypassPopupMenu(bypassButton_);
+        }
+    };
     bypassAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         state, bypassParameterId, bypassButton_);
     refresh();
@@ -311,6 +318,11 @@ void SuiteStrip::refresh() {
     styleButton(aButton_, !slotB);
     styleButton(bButton_, slotB);
     styleButton(bypassButton_, bypassButton_.getToggleState());
+    const bool bypassLocked = actions_.isBypassLocked && actions_.isBypassLocked();
+    if (static_cast<bool>(bypassButton_.getProperties().getWithDefault("paramLocked", false)) != bypassLocked) {
+        bypassButton_.getProperties().set("paramLocked", bypassLocked);
+        bypassButton_.repaint();
+    }
     for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         styleButton(*button, false);
     }

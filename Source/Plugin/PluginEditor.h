@@ -20,8 +20,11 @@ public:
     void mouseDrag(const juce::MouseEvent& e) override;
     bool keyPressed(const juce::KeyPress& key) override;
     void setTooltip(const juce::String& newTooltip) override;
+    void childrenChanged() override;
     void focusGained(FocusChangeType) override { repaint(); }
     void focusLost(FocusChangeType) override { repaint(); }
+
+    std::function<void()> onPopupMenu;
 
 private:
     juce::Point<float> lastMouse_;
@@ -45,6 +48,8 @@ private:
     void updateMeter();
     void paintBackground(juce::Graphics& g) const;
     void positionPresetBrowser();
+    void showParamLockMenu(const juce::String& paramId, juce::Component& target);
+    void syncLockIndicators();
 
     BassSpaceProcessor& processor_;
     BassSpaceTheme theme_;
@@ -56,9 +61,9 @@ private:
     FineSlider subDriveSlider_;
     FineSlider outputDbSlider_;
     FineSlider upperTiltSlider_;
-    juce::TextButton soloLowButton_{"SOLO BASS"};
-    juce::TextButton slopeButton_{"SLOPE 24 dB"};
-    juce::TextButton ellipticalButton_{"SIDE-ONLY SPLIT"};
+    alanmarcero::suite::PopupTextButton soloLowButton_{"SOLO BASS"};
+    alanmarcero::suite::PopupTextButton slopeButton_{"SLOPE 24 dB"};
+    alanmarcero::suite::PopupTextButton ellipticalButton_{"SIDE-ONLY SPLIT"};
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label upperWidthLabel_;

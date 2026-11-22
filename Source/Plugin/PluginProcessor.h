@@ -8,6 +8,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 #include <limits>
+#include <mutex>
+#include <set>
 
 // One A/B slot: its parameter values and the preset they came from.
 struct CompareSlot {
@@ -127,6 +129,11 @@ public:
     [[nodiscard]] alanmarcero::suite::ParameterSnapshot currentParameterValues() const;
     void setUserPresetDirectory(const juce::File& directory);
 
+    [[nodiscard]] bool isParamLocked(const juce::String& paramId) const;
+    void setParamLocked(const juce::String& paramId, bool locked);
+    void unlockAllParams();
+    [[nodiscard]] bool hasAnyLockedParams() const;
+
     juce::AudioProcessorValueTreeState parameters;
 
 private:
@@ -136,7 +143,7 @@ private:
     void restoreParameterTree(juce::ValueTree tree);
     [[nodiscard]] juce::ValueTree captureMemory() const;
     void restoreMemory(const juce::ValueTree& memory);
-    void applyValues(const alanmarcero::suite::ParameterSnapshot& values);
+    void applyValues(const alanmarcero::suite::ParameterSnapshot& values, bool skipLocked = false);
     [[nodiscard]] CompareSlot captureSlot() const;
 
     std::atomic<float>* freqParam_ = nullptr;
@@ -172,6 +179,8 @@ private:
     int editorWidth_ = defaultEditorWidth;
     int editorHeight_ = defaultEditorHeight;
     alanmarcero::suite::SuiteHistory history_;
+    mutable std::mutex lockMutex_;
+    std::set<juce::String> lockedParams_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSpaceProcessor)
 };

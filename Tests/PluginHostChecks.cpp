@@ -1286,6 +1286,80 @@ int main(int argc, char** argv) {
         collisionDirectory.deleteRecursively();
     }
 
+    {
+        BassSpaceProcessor locker;
+        std::vector<juce::RangedAudioParameter*> rangedParams;
+        for (auto* parameter : locker.getParameters()) {
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameter)) {
+                rangedParams.push_back(ranged);
+            }
+        }
+        require(!rangedParams.empty(), "processor exposes ranged parameters");
+
+        std::vector<float> lockedValues;
+        lockedValues.reserve(rangedParams.size());
+        alanmarcero::suite::PresetEntry oppositePreset;
+        oppositePreset.name = "Opposite";
+        oppositePreset.factory = false;
+
+        for (auto* ranged : rangedParams) {
+            const auto& id = ranged->paramID;
+            require(!locker.isParamLocked(id), "parameters start unlocked");
+            const float lockedNorm = ranged->getValue() < 0.5f ? 1.0f : 0.0f;
+            const float oppositeNorm = 1.0f - lockedNorm;
+            ranged->setValueNotifyingHost(lockedNorm);
+            lockedValues.push_back(ranged->getValue());
+            oppositePreset.values.emplace_back(id, ranged->convertFrom0to1(oppositeNorm));
+            locker.setParamLocked(id, true);
+            require(locker.isParamLocked(id), "every RangedAudioParameter ID can be locked");
+        }
+        require(locker.hasAnyLockedParams(), "hasAnyLockedParams reports active locks");
+
+        {
+            BassSpaceEditor lockEditor(locker);
+            lockEditor.refreshDisplay();
+            checkLayout(lockEditor, "with all parameters locked");
+        }
+
+        juce::MemoryBlock state;
+        locker.getStateInformation(state);
+
+        BassSpaceProcessor recalled;
+        recalled.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+        require(recalled.hasAnyLockedParams(), "locks survive getStateInformation/setStateInformation");
+
+        std::vector<juce::RangedAudioParameter*> recalledParams;
+        for (auto* parameter : recalled.getParameters()) {
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameter)) {
+                recalledParams.push_back(ranged);
+            }
+        }
+        require(recalledParams.size() == rangedParams.size(), "restored parameter count matches");
+
+        recalled.loadPreset(oppositePreset);
+        for (size_t i = 0; i < recalledParams.size(); ++i) {
+            auto* ranged = recalledParams[i];
+            require(recalled.isParamLocked(ranged->paramID), "lock survives state recall and preset load");
+            require(std::abs(ranged->getValue() - lockedValues[i]) < 1.0e-4f,
+                    "locked parameter value is preserved across loadPreset");
+        }
+
+        recalled.setCurrentProgram(1);
+        for (size_t i = 0; i < recalledParams.size(); ++i) {
+            require(std::abs(recalledParams[i]->getValue() - lockedValues[i]) < 1.0e-4f,
+                    "locked parameter value is preserved across setCurrentProgram");
+        }
+
+        recalled.unlockAllParams();
+        require(!recalled.hasAnyLockedParams(), "unlockAllParams clears all locks");
+        recalled.loadPreset(oppositePreset);
+        for (size_t i = 0; i < recalledParams.size(); ++i) {
+            require(!recalled.isParamLocked(recalledParams[i]->paramID), "unlocked parameter stays unlocked");
+            require(std::abs(recalledParams[i]->getValue() - lockedValues[i]) > 0.25f,
+                    "unlocked parameter updates on preset load");
+        }
+    }
+
     std::cout << "openBassSpace v" << JucePlugin_VersionString
               << " checks passed and screenshot saved to " << outPath << "\n";
     return 0;

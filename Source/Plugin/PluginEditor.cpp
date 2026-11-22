@@ -71,6 +71,20 @@ void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slide
     slider.setBounds(group.withSizeKeepingCentre(dial, group.getHeight()));
 }
 
+void drawPadlock(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour colour) {
+    const float bodyHeight = bounds.getHeight() * 0.56f;
+    const auto body = bounds.withTop(bounds.getBottom() - bodyHeight);
+    const auto shackle = juce::Rectangle<float>(bounds.getWidth() * 0.64f, bounds.getHeight() * 0.54f)
+                             .withCentre({ bounds.getCentreX(), body.getY() });
+
+    juce::Path shacklePath;
+    shacklePath.addArc(shackle.getX(), shackle.getY(), shackle.getWidth(), shackle.getHeight(),
+                       -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
+    g.setColour(colour);
+    g.strokePath(shacklePath, juce::PathStrokeType(1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.fillRoundedRectangle(body, 1.5f);
+}
+
 } // namespace
 
 juce::Font BassSpaceTheme::getTextButtonFont(juce::TextButton&, int) {
@@ -88,6 +102,9 @@ juce::Label* BassSpaceTheme::createSliderTextBox(juce::Slider& slider) {
 void BassSpaceTheme::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position,
                                       float startAngle, float endAngle, juce::Slider& slider) {
     juce::LookAndFeel_V4::drawRotarySlider(g, x, y, width, height, position, startAngle, endAngle, slider);
+    if (static_cast<bool>(slider.getProperties().getWithDefault("paramLocked", false))) {
+        drawPadlock(g, { static_cast<float>(x + width) - 13.0f, static_cast<float>(y) + 2.0f, 10.0f, 12.0f }, kAccentGold);
+    }
     if (slider.hasKeyboardFocus(false)) {
         g.setColour(kAccentMint);
         g.drawRoundedRectangle(juce::Rectangle<int>(x, y, width, height).toFloat().reduced(1.0f), 6.0f, 1.5f);
@@ -97,6 +114,11 @@ void BassSpaceTheme::drawRotarySlider(juce::Graphics& g, int x, int y, int width
 void BassSpaceTheme::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& background,
                                           bool highlighted, bool down) {
     juce::LookAndFeel_V4::drawButtonBackground(g, button, background, highlighted, down);
+    if (static_cast<bool>(button.getProperties().getWithDefault("paramLocked", false))) {
+        const auto bounds = button.getLocalBounds().toFloat();
+        const auto colour = button.getToggleState() ? kBackground : kAccentGold;
+        drawPadlock(g, { bounds.getRight() - 13.0f, bounds.getY() + 3.0f, 9.0f, 11.0f }, colour);
+    }
     if (button.hasKeyboardFocus(false)) {
         g.setColour(kAccentMint);
         g.drawRoundedRectangle(button.getLocalBounds().toFloat().reduced(1.5f), 6.0f, 2.0f);
@@ -104,6 +126,15 @@ void BassSpaceTheme::drawButtonBackground(juce::Graphics& g, juce::Button& butto
 }
 
 void FineSlider::mouseDown(const juce::MouseEvent& e) {
+    if (e.mods.isPopupMenu()) {
+        if (onPopupMenu) {
+            onPopupMenu();
+        }
+        return;
+    }
+    if (e.eventComponent != this) {
+        return;
+    }
     lastMouse_ = e.position;
     dragPosition_ = e.position;
     juce::Slider::mouseDown(e);
@@ -146,6 +177,16 @@ void FineSlider::setTooltip(const juce::String& newTooltip) {
     for (auto* child : getChildren()) {
         if (auto* valueBox = dynamic_cast<juce::Label*>(child)) {
             valueBox->setTooltip(newTooltip);
+        }
+    }
+}
+
+void FineSlider::childrenChanged() {
+    juce::Slider::childrenChanged();
+    for (auto* child : getChildren()) {
+        if (auto* valueBox = dynamic_cast<juce::Label*>(child)) {
+            valueBox->removeMouseListener(this);
+            valueBox->addMouseListener(this, false);
         }
     }
 }
@@ -253,6 +294,24 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     ellipticalAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kElliptical, ellipticalButton_);
 
+    const auto bindSliderMenu = [this](FineSlider& slider, const char* paramId) {
+        slider.onPopupMenu = [this, &slider, paramId] { showParamLockMenu(paramId, slider); };
+    };
+    bindSliderMenu(freqSlider_, bass_space::params::kFrequency);
+    bindSliderMenu(widthSlider_, bass_space::params::kWidth);
+    bindSliderMenu(upperWidthSlider_, bass_space::params::kUpperWidth);
+    bindSliderMenu(stereoizeSlider_, bass_space::params::kStereoize);
+    bindSliderMenu(outputDbSlider_, bass_space::params::kOutputDb);
+    bindSliderMenu(subDriveSlider_, bass_space::params::kSubDrive);
+    bindSliderMenu(upperTiltSlider_, bass_space::params::kUpperTilt);
+
+    const auto bindButtonMenu = [this](alanmarcero::suite::PopupTextButton& button, const char* paramId) {
+        button.onPopupMenu = [this, &button, paramId] { showParamLockMenu(paramId, button); };
+    };
+    bindButtonMenu(soloLowButton_, bass_space::params::kSoloLow);
+    bindButtonMenu(slopeButton_, bass_space::params::kSlope);
+    bindButtonMenu(ellipticalButton_, bass_space::params::kElliptical);
+
     presetBrowser_.onChanged = [this] { suiteStrip_.refresh(); };
     presetBrowser_.onSaved = [this](const juce::String& name) { processor_.markPresetSaved(name); };
     alanmarcero::suite::SuiteActions actions;
@@ -268,6 +327,10 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     actions.presetName = [this] { return processor_.currentPresetName() + (processor_.isPresetEdited() ? " *" : ""); };
     actions.previousPreset = [this] { processor_.stepPreset(-1); };
     actions.nextPreset = [this] { processor_.stepPreset(1); };
+    actions.isBypassLocked = [this] { return processor_.isParamLocked(bass_space::params::kBypass); };
+    actions.onBypassPopupMenu = [this](juce::Component& target) {
+        showParamLockMenu(bass_space::params::kBypass, target);
+    };
     actions.togglePresetBrowser = [this] {
         presetBrowser_.setVisible(!presetBrowser_.isVisible());
         if (presetBrowser_.isVisible()) {
@@ -322,6 +385,7 @@ bool BassSpaceEditor::keyPressed(const juce::KeyPress& key) {
 void BassSpaceEditor::refreshDisplay() {
     updateMeter();
     suiteStrip_.refresh();
+    syncLockIndicators();
 
     // Solo bass mutes the upper band, so its dials draw dim and their tooltips say how to hear them.
     const bool soloBass = processor_.currentSoloLow();
@@ -384,6 +448,60 @@ void BassSpaceEditor::updateMeter() {
     }
     const auto crossover = processor_.parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText();
     bassCorrelationLabel_.setText("Below " + crossover, juce::dontSendNotification);
+}
+
+void BassSpaceEditor::showParamLockMenu(const juce::String& paramId, juce::Component& target) {
+    auto* param = processor_.parameters.getParameter(paramId);
+    if (param == nullptr) {
+        return;
+    }
+
+    const bool locked = processor_.isParamLocked(paramId);
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&theme_);
+    menu.addItem(1, (locked ? "Unlock " : "Lock ") + param->getName(64));
+    if (processor_.hasAnyLockedParams()) {
+        menu.addSeparator();
+        menu.addItem(2, "Unlock all parameters");
+    }
+
+    juce::Component::SafePointer<BassSpaceEditor> safeThis(this);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&target),
+                       [safeThis, paramId](int result) {
+                           if (safeThis == nullptr) {
+                               return;
+                           }
+                           if (result == 1) {
+                               safeThis->processor_.setParamLocked(paramId, !safeThis->processor_.isParamLocked(paramId));
+                               safeThis->refreshDisplay();
+                           } else if (result == 2) {
+                               safeThis->processor_.unlockAllParams();
+                               safeThis->refreshDisplay();
+                           }
+                       });
+}
+
+void BassSpaceEditor::syncLockIndicators() {
+    const std::pair<const char*, juce::Component*> controls[] = {
+        { bass_space::params::kFrequency, &freqSlider_ },
+        { bass_space::params::kWidth, &widthSlider_ },
+        { bass_space::params::kUpperWidth, &upperWidthSlider_ },
+        { bass_space::params::kStereoize, &stereoizeSlider_ },
+        { bass_space::params::kOutputDb, &outputDbSlider_ },
+        { bass_space::params::kSubDrive, &subDriveSlider_ },
+        { bass_space::params::kUpperTilt, &upperTiltSlider_ },
+        { bass_space::params::kSoloLow, &soloLowButton_ },
+        { bass_space::params::kSlope, &slopeButton_ },
+        { bass_space::params::kElliptical, &ellipticalButton_ },
+    };
+
+    for (const auto& [paramId, control] : controls) {
+        const bool locked = processor_.isParamLocked(paramId);
+        if (static_cast<bool>(control->getProperties().getWithDefault("paramLocked", false)) != locked) {
+            control->getProperties().set("paramLocked", locked);
+            control->repaint();
+        }
+    }
 }
 
 void BassSpaceEditor::positionPresetBrowser() {
