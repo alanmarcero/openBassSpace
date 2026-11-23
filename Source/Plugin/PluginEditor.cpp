@@ -14,7 +14,7 @@ const juce::Colour kAccentMint{ 0xff48f0c8 };
 const juce::Colour kAccentGold{ 0xffffbe3b };
 const juce::Colour kTextWhite{ 0xffe6f0f5 };
 const juce::Colour kTextDim{ 0xffa3b6bf };
-const juce::Colour kPanelRule{ 0xff31434d };
+const juce::Colour kPanelRule{ 0xff455c68 };
 constexpr int kNameHeight = 16;
 constexpr int kValueHeight = 20;
 constexpr int kKnobMargin = 6;
@@ -121,7 +121,7 @@ void BassSpaceTheme::drawButtonBackground(juce::Graphics& g, juce::Button& butto
                                           bool highlighted, bool down) {
     const bool disabled = !button.isEnabled();
     if (disabled) {
-        g.beginTransparencyLayer(0.4f);
+        g.beginTransparencyLayer(0.55f);
     }
     juce::LookAndFeel_V4::drawButtonBackground(g, button, background, highlighted, down);
     if (static_cast<bool>(button.getProperties().getWithDefault("paramLocked", false))) {
@@ -143,7 +143,7 @@ void BassSpaceTheme::drawButtonText(juce::Graphics& g, juce::TextButton& button,
     g.setFont(font);
     g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                           : juce::TextButton::textColourOffId)
-                    .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
+                    .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.6f));
 
     const int yIndent = juce::jmin(4, button.proportionOfHeight(0.3f));
     const int cornerSize = juce::jmin(button.getHeight(), button.getWidth()) / 2;
@@ -274,10 +274,11 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     }
     for (auto* value : { &correlationValueLabel_, &bassCorrelationValueLabel_ }) {
         value->setJustificationType(juce::Justification::centredRight);
-        value->setFont(juce::FontOptions(18.0f, juce::Font::bold));
+        value->setFont(juce::FontOptions(19.0f, juce::Font::bold));
+        value->setBorderSize(juce::BorderSize<int>(0, 0, 0, 2));
     }
 
-    configureKnob(outputDbSlider_, outputDbLabel_, "Output dB", kAccentMint,
+    configureKnob(outputDbSlider_, outputDbLabel_, "Output", kAccentMint,
                   "Set the plug-in output level in decibels.");
     configureKnob(subDriveSlider_, subDriveLabel_, "Sub drive", kAccentMint,
                   "Blend mono-locked sub-octave synthesis and ADAA saturation into the bass band.");
@@ -532,7 +533,7 @@ void BassSpaceEditor::updateMeter() {
         }();
         const auto colour = [hundredths] {
             if (std::isnan(hundredths)) {
-                return kTextDim;
+                return kTextWhite.withAlpha(0.82f);
             }
             return hundredths < -0.005f ? kAccentGold : kAccentMint;
         }();
@@ -640,7 +641,7 @@ void BassSpaceEditor::paintBackground(juce::Graphics& g) const {
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(3.0f), 5.0f, 1.2f);
     g.setColour(kPanelRule);
     for (const auto& divider : knobDividers_) {
-        g.drawLine(divider, 1.0f);
+        g.drawLine(divider, 1.2f);
     }
 
     g.setFont(juce::FontOptions(24.0f, juce::Font::bold));
@@ -658,8 +659,8 @@ void BassSpaceEditor::paintBackground(juce::Graphics& g) const {
     g.setColour(kAccentMint);
     g.drawText("SUB STEREO FIELD SHAPER", badgeArea_, juce::Justification::centred);
 
-    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-    g.setColour(kTextDim);
+    g.setFont(juce::FontOptions(13.5f, juce::Font::bold));
+    g.setColour(kTextWhite.withAlpha(0.82f));
     g.drawText("v" JucePlugin_VersionString, headerArea_, juce::Justification::centredRight);
 
     const auto centerArea = fieldArea_.toFloat();
@@ -764,7 +765,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         juce::AttributedString text;
         text.setJustification(juce::Justification::centred);
         text.setWordWrap(juce::AttributedString::none);
-        text.append("BASS " + widthCaption(*parameters.getParameter(bass_space::params::kWidth)) + " below "
+        text.append("BASS " + widthCaption(*parameters.getParameter(bass_space::params::kWidth)) + " BELOW "
                         + parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText(),
                     captionFont, widthColour(bassWidth));
         text.append("  |  ", captionFont, kTextDim);
@@ -807,8 +808,8 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         g.drawText(text, juce::Rectangle<float>(28.0f, 14.0f).withCentre(under), juce::Justification::centred);
     }
 
-    g.setFont(juce::FontOptions(11.0f));
-    g.setColour(kTextDim);
+    g.setFont(juce::FontOptions(12.0f));
+    g.setColour(kTextWhite.withAlpha(0.78f));
     g.drawText(footerText_, footerArea_, juce::Justification::centred);
 }
 
@@ -857,7 +858,7 @@ void BassSpaceEditor::resized() {
     meterArea_ = field.removeFromBottom(72).reduced(12, 6);
     auto meter = meterArea_;
     const auto placeMeterRow = [&meter](juce::Label& name, juce::Label& value) {
-        auto row = meter.removeFromTop(22);
+        auto row = meter.removeFromTop(23);
         name.setBounds(row.removeFromLeft(104));
         value.setBounds(row.removeFromRight(60));
         return row.reduced(10, 7).toFloat();
@@ -871,7 +872,7 @@ void BassSpaceEditor::resized() {
 
     auto cells = masterArea_.reduced(10, 6);
     auto buttonColumn = cells.removeFromRight(juce::jlimit(134, 152, cells.getWidth() / 4));
-    cells.removeFromRight(8);
+    cells.removeFromRight(18);
     const int cellW = cells.getWidth() / 3;
     placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_);
     placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_);

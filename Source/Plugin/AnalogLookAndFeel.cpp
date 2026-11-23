@@ -184,7 +184,7 @@ void AnalogLookAndFeel::drawRotarySlider(
     const auto* scaleValues = slider.getProperties()["scaleValues"].getArray();
     const auto* scaleLabels = slider.getProperties()["scaleLabels"].getArray();
     if (scaleValues != nullptr && scaleLabels != nullptr) {
-        g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+        g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
         for (int i = 0; i < std::min(scaleValues->size(), scaleLabels->size()); ++i) {
             const double value = static_cast<double>((*scaleValues)[i]);
             const float norm = static_cast<float>(slider.valueToProportionOfLength(value));
@@ -196,7 +196,7 @@ void AnalogLookAndFeel::drawRotarySlider(
 
             g.setColour(lit ? palette_.headerTitle : palette_.knobTick);
             g.drawText((*scaleLabels)[i].toString(),
-                       juce::Rectangle<float>(38.0f, 13.0f).withCentre(pointAt(radius + 16.5f, angle)),
+                       juce::Rectangle<float>(40.0f, 14.0f).withCentre(pointAt(radius + 16.5f, angle)),
                        juce::Justification::centred, false);
         }
     }

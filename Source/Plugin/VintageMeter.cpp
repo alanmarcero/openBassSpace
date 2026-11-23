@@ -93,9 +93,9 @@ void VintageMeter::paintChannel(juce::Graphics& g, juce::Rectangle<float> area, 
     g.fillRoundedRectangle(clip, 1.0f);
 
     const auto readout = area.withTrimmedTop(20.0f).withHeight(16.0f).withTrimmedLeft(17.0f);
-    g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     g.setColour(palette_.meterScaleText);
-    g.drawText("PEAK dBFS", readout.withWidth(72.0f), juce::Justification::centredLeft);
+    g.drawText("PEAK dBFS", readout.withWidth(78.0f), juce::Justification::centredLeft);
     const auto peakText = state.peakHoldDb <= -59.5f ? juce::String("----")
         : (state.peakHoldDb > 0.05f ? "+" : "") + juce::String(state.peakHoldDb, 1);
     drawLedNumber(g, readout.withTrimmedRight(1.0f), peakText, state.peakHoldDb >= 0.0f ? kRed : kGreen);
@@ -108,11 +108,11 @@ void VintageMeter::paintCorrelation(juce::Graphics& g, juce::Rectangle<float> ar
     g.drawRoundedRectangle(area, 3.5f, 1.0f);
 
     auto inner = area.reduced(4.0f, 2.0f);
-    g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     g.setColour(palette_.meterRedZone.withAlpha(0.9f));
-    g.drawText("-1", inner.removeFromLeft(18.0f), juce::Justification::centred);
+    g.drawText("-1", inner.removeFromLeft(20.0f), juce::Justification::centred);
     g.setColour(palette_.accentPrimary.withAlpha(0.9f));
-    g.drawText("+1", inner.removeFromRight(18.0f), juce::Justification::centred);
+    g.drawText("+1", inner.removeFromRight(20.0f), juce::Justification::centred);
 
     const auto track = inner.reduced(4.0f, 3.0f);
     g.setColour(palette_.meterFaceBottom);
@@ -144,13 +144,13 @@ void VintageMeter::paint(juce::Graphics& g) {
     auto inner = bounds.reduced(8.0f, 6.0f);
     const auto scale = inner.removeFromTop(17.0f);
     const auto track = scale.withTrimmedLeft(17.0f).withTrimmedRight(20.0f);
-    g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     g.setColour(palette_.meterScaleText);
-    g.drawText("VU", scale.withWidth(18.0f), juce::Justification::centredLeft);
+    g.drawText("VU", scale.withWidth(20.0f), juce::Justification::centredLeft);
     for (const int db : {-24, -18, -12, -6, 0, 6}) {
         const float x = track.getX() + meterPosition(static_cast<float>(db)) * track.getWidth();
         g.setColour(db > 0 ? kRed : db == 0 ? kAmber : palette_.meterScaleText);
-        g.drawText(db > 0 ? "+6" : juce::String(db), juce::Rectangle<float>(x - 14.0f, scale.getY(), 28.0f, 14.0f), juce::Justification::centred);
+        g.drawText(db > 0 ? "+6" : juce::String(db), juce::Rectangle<float>(x - 14.0f, scale.getY(), 28.0f, 15.0f), juce::Justification::centred);
     }
     g.setColour(kRed.withAlpha(0.75f));
     g.setFont(juce::FontOptions(10.0f, juce::Font::bold));

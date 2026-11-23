@@ -387,7 +387,8 @@ void SuiteStrip::refresh() {
         return bypassLocked ? (base + suffix) : base;
     };
     bypassButton_.setTooltip(syncLockSuffix(bypassButton_.getTooltip()));
-    for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_, &previousPreset_, &nextPreset_ }) {
+    for (juce::TextButton* button : std::initializer_list<juce::TextButton*>{
+             &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         styleButton(*button, false);
     }
     undoButton_.setEnabled(!actions_.canUndo || actions_.canUndo());

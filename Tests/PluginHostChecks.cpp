@@ -377,7 +377,7 @@ int main(int argc, char** argv) {
     require(hasVisibleLabel(*editor, "Sub drive"), "Sub drive section label is visible");
     require(hasVisibleLabel(*editor, "Upper tilt"), "Upper tilt section label is visible");
     require(hasVisibleLabel(*editor, "Correlation"), "Correlation meter label is visible");
-    require(hasVisibleLabel(*editor, "Output dB"), "Output dB section label is visible");
+    require(hasVisibleLabel(*editor, "Output"), "Output section label is visible");
     require(hasVisibleLabel(*editor, "120 Hz"), "Crossover value includes frequency units");
     require(hasVisibleLabel(*editor, "0%"), "Stereo width value includes percent units");
     require(hasVisibleLabel(*editor, "0.0 dB"), "Output value includes decibel units");
@@ -386,7 +386,7 @@ int main(int argc, char** argv) {
         auto* slider = dynamic_cast<juce::Slider*>(child);
         return slider == nullptr || (slider->getTitle().isNotEmpty() && hasVisibleLabel(*editor, slider->getTitle()));
     });
-    require(everyDialTitled && findSlider(*editor, "Output dB") != nullptr, "each dial's title is its visible name");
+    require(everyDialTitled && findSlider(*editor, "Output") != nullptr, "each dial's title is its visible name");
     require(findVisible<juce::Button>(*editor, [](const juce::Button& button) { return button.getTitle().isEmpty(); }) == nullptr,
             "every button has a spoken title");
     require(findById(*editor, "compareA")->getTitle() == "Slot A" && findById(*editor, "copyAtoB")->getTitle() == "Copy A to B",

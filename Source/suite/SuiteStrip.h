@@ -85,6 +85,27 @@ private:
     juce::String armedText_;
 };
 
+/// Text button with a right-aligned downward chevron indicator for dropdown triggers.
+class DropdownButton final : public juce::TextButton {
+public:
+    using juce::TextButton::TextButton;
+
+    void paint(juce::Graphics& g) override {
+        juce::TextButton::paint(g);
+        const auto colour = findColour(getToggleState() ? juce::TextButton::textColourOnId
+                                                        : juce::TextButton::textColourOffId)
+                                .withMultipliedAlpha(isEnabled() ? 0.85f : 0.6f);
+        const float cx = static_cast<float>(getWidth()) - 14.0f;
+        const float cy = static_cast<float>(getHeight()) * 0.5f;
+        juce::Path chevron;
+        chevron.startNewSubPath(cx - 4.0f, cy - 2.0f);
+        chevron.lineTo(cx, cy + 2.5f);
+        chevron.lineTo(cx + 4.0f, cy - 2.0f);
+        g.setColour(colour);
+        g.strokePath(chevron, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+};
+
 // Compact undo, A/B, bypass, and preset controls. Colours match the openBassSpace faceplate.
 class SuiteStrip : public juce::Component {
 public:
@@ -108,7 +129,7 @@ private:
     juce::TextButton copyAtoB_{"Copy A to B"};
     juce::TextButton copyBtoA_{"Copy B to A"};
     PopupTextButton bypassButton_{"Bypass"};
-    juce::TextButton presetButton_{"Presets"};
+    DropdownButton presetButton_{"Presets"};
     juce::TextButton previousPreset_{"<"};
     juce::TextButton nextPreset_{">"};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment_;
