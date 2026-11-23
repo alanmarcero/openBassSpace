@@ -28,6 +28,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     search_.setTextToShowWhenEmpty("Search presets", kDim);
     name_.setTextToShowWhenEmpty("Name for Save or Rename", kDim);
     for (auto* field : { &search_, &name_ }) {
+        field->setFont(juce::FontOptions(14.0f));
         field->setColour(juce::TextEditor::backgroundColourId, kBackground);
         field->setColour(juce::TextEditor::textColourId, kText);
         field->setColour(juce::TextEditor::outlineColourId, kEdge);

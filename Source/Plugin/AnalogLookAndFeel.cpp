@@ -184,7 +184,7 @@ void AnalogLookAndFeel::drawRotarySlider(
     const auto* scaleValues = slider.getProperties()["scaleValues"].getArray();
     const auto* scaleLabels = slider.getProperties()["scaleLabels"].getArray();
     if (scaleValues != nullptr && scaleLabels != nullptr) {
-        g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
+        g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
         for (int i = 0; i < std::min(scaleValues->size(), scaleLabels->size()); ++i) {
             const double value = static_cast<double>((*scaleValues)[i]);
             const float norm = static_cast<float>(slider.valueToProportionOfLength(value));
@@ -196,7 +196,7 @@ void AnalogLookAndFeel::drawRotarySlider(
 
             g.setColour(lit ? palette_.headerTitle : palette_.knobTick);
             g.drawText((*scaleLabels)[i].toString(),
-                       juce::Rectangle<float>(34.0f, 10.0f).withCentre(pointAt(radius + 15.5f, angle)),
+                       juce::Rectangle<float>(38.0f, 13.0f).withCentre(pointAt(radius + 16.5f, angle)),
                        juce::Justification::centred, false);
         }
     }
@@ -278,7 +278,7 @@ void AnalogLookAndFeel::drawToggleButton(
     g.fillRect(led);
 
     g.setColour(isOn ? palette_.switchActiveText : palette_.switchInactiveText);
-    g.setFont(juce::FontOptions(9.5f, juce::Font::bold));
+    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     g.drawFittedText(text, face.withTrimmedLeft(20.0f).withTrimmedRight(4.0f).toNearestInt(), juce::Justification::centred, 1);
 }
 
@@ -385,7 +385,7 @@ void AnalogLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label) {
     while (numberEnd < text.length() && juce::String("0123456789.+-").containsChar(text[numberEnd])) ++numberEnd;
     const auto number = text.substring(0, numberEnd);
     const auto unit = text.substring(numberEnd).trim();
-    const juce::Font unitFont(juce::FontOptions(9.0f));
+    const juce::Font unitFont(juce::FontOptions(11.0f));
     const float unitWidth = juce::GlyphArrangement::getStringWidth(unitFont, unit);
     const float digitHeight = 14.0f;
     float digitUnits = 0.0f;

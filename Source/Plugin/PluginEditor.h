@@ -65,9 +65,9 @@ private:
     FineSlider subDriveSlider_;
     FineSlider outputDbSlider_;
     FineSlider upperTiltSlider_;
-    alanmarcero::suite::PopupTextButton soloLowButton_{"SOLO BASS"};
-    alanmarcero::suite::PopupTextButton slopeButton_{"SLOPE 24 dB"};
-    alanmarcero::suite::PopupTextButton ellipticalButton_{"SIDE-ONLY SPLIT"};
+    alanmarcero::suite::PopupTextButton soloLowButton_{"Solo bass"};
+    alanmarcero::suite::PopupTextButton slopeButton_{"Slope 24 dB"};
+    alanmarcero::suite::PopupTextButton ellipticalButton_{"Side-only split"};
     juce::Label freqLabel_;
     juce::Label widthLabel_;
     juce::Label upperWidthLabel_;
@@ -79,6 +79,7 @@ private:
     juce::Label bassCorrelationLabel_;
     juce::Label bassCorrelationValueLabel_;
     juce::Label outputDbLabel_;
+    juce::Label upperMutedChip_;
 
     alanmarcero::suite::SuiteStrip suiteStrip_;
     alanmarcero::suite::PresetBrowser presetBrowser_;

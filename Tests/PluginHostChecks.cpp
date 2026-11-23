@@ -992,14 +992,14 @@ int main(int argc, char** argv) {
         auto* sideOnlyButton = dynamic_cast<juce::Button*>(findById(*modesEditor, "sideOnlyButton"));
         auto* slope = modes.parameters.getParameter("slope");
         auto* sideOnly = modes.parameters.getParameter("elliptical");
-        require(slopeButton != nullptr && slopeButton->getButtonText() == "SLOPE 24 dB",
+        require(slopeButton != nullptr && slopeButton->getButtonText() == "Slope 24 dB",
                 "the slope button names the current 24 dB slope");
         slopeButton->triggerClick();
         pump();
-        require(slopeButton->getButtonText() == "SLOPE 48 dB" && slope->getCurrentValueAsText() == "48 dB",
+        require(slopeButton->getButtonText() == "Slope 48 dB" && slope->getCurrentValueAsText() == "48 dB",
                 "the slope button and the host name the same 48 dB slope");
         require(slope->getName(64) == "Slope" && sideOnly->getName(64) == "Side-only split"
-                    && sideOnlyButton != nullptr && sideOnlyButton->getButtonText() == "SIDE-ONLY SPLIT",
+                    && sideOnlyButton != nullptr && sideOnlyButton->getButtonText() == "Side-only split",
                 "the host and the editor use one name for each mode");
     }
 
@@ -1251,15 +1251,18 @@ int main(int argc, char** argv) {
         require(!findById(soloEditor, "undoButton")->isEnabled(), "Undo with an empty history is disabled");
         auto* upper = findSlider(soloEditor, "Upper width");
         auto* crossover = findSlider(soloEditor, "Crossover");
+        auto* mutedChip = findById(soloEditor, "upperMutedChip");
         soloing.parameters.getParameter("solo_low")->setValueNotifyingHost(1.0f);
         soloEditor.refreshDisplay();
         require(std::abs(upper->getAlpha() - 0.4f) < 0.01f && upper->isEnabled()
+                    && mutedChip != nullptr && mutedChip->isVisible()
                     && upper->getTooltip().contains("Turn off Solo bass") && valueBoxOf(*upper)->getTooltip().contains("Turn off Solo bass")
                     && std::abs(crossover->getAlpha() - 1.0f) < 0.01f,
-                "with Solo bass on, the upper-band dials draw dim, stay editable and say how to hear them");
+                "with Solo bass on, the upper-band dials draw dim, stay editable, show an inline chip, and say how to hear them");
         soloing.parameters.getParameter("solo_low")->setValueNotifyingHost(0.0f);
         soloEditor.refreshDisplay();
-        require(std::abs(upper->getAlpha() - 1.0f) < 0.01f && !upper->getTooltip().contains("Solo bass")
+        require(std::abs(upper->getAlpha() - 1.0f) < 0.01f && !mutedChip->isVisible()
+                    && !upper->getTooltip().contains("Solo bass")
                     && !valueBoxOf(*upper)->getTooltip().contains("Solo bass"),
                 "turning Solo bass off brings the upper-band dials back");
     }

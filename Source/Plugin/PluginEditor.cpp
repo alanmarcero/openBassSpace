@@ -310,6 +310,16 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     stereoFieldAnchor_.setComponentID("stereoField");
     stereoFieldAnchor_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(stereoFieldAnchor_);
+
+    upperMutedChip_.setComponentID("upperMutedChip");
+    upperMutedChip_.setText("Muted by Solo bass", juce::dontSendNotification);
+    upperMutedChip_.setJustificationType(juce::Justification::centred);
+    upperMutedChip_.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    upperMutedChip_.setColour(juce::Label::textColourId, kAccentGold);
+    upperMutedChip_.setColour(juce::Label::backgroundColourId, kPanel);
+    upperMutedChip_.setColour(juce::Label::outlineColourId, kAccentGold.withAlpha(0.65f));
+    addChildComponent(upperMutedChip_);
+
     addChildComponent(presetBrowser_);
     setLookAndFeel(&theme_);
 
@@ -333,7 +343,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         processor_.parameters, bass_space::params::kSlope, slopeButton_);
     slopeButton_.onStateChange = [this] {
         const auto slope = processor_.parameters.getParameter(bass_space::params::kSlope)->getCurrentValueAsText();
-        slopeButton_.setButtonText("SLOPE " + slope);
+        slopeButton_.setButtonText("Slope " + slope);
         slopeButton_.setTitle("Slope " + slope);
     };
     slopeButton_.onStateChange();
@@ -475,6 +485,7 @@ void BassSpaceEditor::refreshDisplay() {
     const bool soloBass = processor_.currentSoloLow();
     if (soloBass != upperBandDimmed_) {
         upperBandDimmed_ = soloBass;
+        upperMutedChip_.setVisible(soloBass);
         const juce::String soloHint = soloBass ? " Turn off Solo bass to hear it." : "";
         for (auto* dial : { &upperWidthSlider_, &stereoizeSlider_, &upperTiltSlider_ }) {
             dial->setAlpha(soloBass ? 0.4f : 1.0f);
@@ -643,7 +654,7 @@ void BassSpaceEditor::paintBackground(juce::Graphics& g) const {
     g.fillRoundedRectangle(badgeArea_.toFloat(), 4.0f);
     g.setColour(kAccentMint.withAlpha(0.6f));
     g.drawRoundedRectangle(badgeArea_.toFloat(), 4.0f, 1.0f);
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     g.setColour(kAccentMint);
     g.drawText("SUB STEREO FIELD SHAPER", badgeArea_, juce::Justification::centred);
 
@@ -657,9 +668,9 @@ void BassSpaceEditor::paintBackground(juce::Graphics& g) const {
     g.setColour(kPanelEdge);
     g.drawRoundedRectangle(centerArea, 5.0f, 1.0f);
 
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     g.setColour(kTextDim);
-    g.drawText("STEREO FIELD", ringArea_.withHeight(16), juce::Justification::centred);
+    g.drawText("STEREO FIELD", ringArea_.withHeight(20), juce::Justification::centred);
 
     if (!masterArea_.isEmpty()) {
         const auto masterStrip = masterArea_.toFloat();
@@ -688,14 +699,14 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         return;
     }
 
-    const auto arcCentre = ringArea_.toFloat().getCentre().translated(
-        0.0f, static_cast<float>(ringArea_.getHeight()) * 0.08f);
+    const auto graphicArea = ringArea_.toFloat().withTrimmedTop(22.0f).withTrimmedBottom(20.0f);
+    const auto arcCentre = graphicArea.getCentre().translated(0.0f, graphicArea.getHeight() * 0.06f);
 
     if (stereoField_) {
         const float phase = processor_.artworkPhase();
         const float pulse = (1.0f - phase) * (1.0f - phase);
-        const float ringSize = juce::jmin(static_cast<float>(ringArea_.getWidth()) * 0.72f,
-                                          static_cast<float>(ringArea_.getHeight()) * 0.78f);
+        const float ringSize = juce::jmin(graphicArea.getWidth() * 0.82f,
+                                          graphicArea.getHeight() * 1.18f);
         auto rings = juce::Rectangle<float>(ringSize * (0.72f + 0.12f * pulse), ringSize * (0.42f + 0.08f * pulse))
                          .withCentre(arcCentre);
         stereoField_->drawWithin(g, rings, juce::RectanglePlacement::centred, 0.46f + 0.40f * pulse);
@@ -703,7 +714,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
 
     g.setColour(kTextDim.withAlpha(0.35f));
     const float dashes[] = { 4.0f, 4.0f };
-    const float beam = juce::jmin(40.0f, static_cast<float>(ringArea_.getHeight()) * 0.22f);
+    const float beam = juce::jmin(48.0f, graphicArea.getHeight() * 0.30f);
     g.drawDashedLine(juce::Line<float>(arcCentre.x, arcCentre.y - beam, arcCentre.x, arcCentre.y + beam * 0.28f),
                      dashes, 2, 1.0f);
 
@@ -711,7 +722,7 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
     const float bassWidth = processor_.currentWidth();
     const float upperWidth = processor_.currentUpperWidth();
     const bool soloBass = processor_.currentSoloLow();
-    const float wingLength = juce::jlimit(28.0f, 64.0f, static_cast<float>(ringArea_.getHeight()) * 0.28f);
+    const float wingLength = juce::jlimit(32.0f, 76.0f, graphicArea.getHeight() * 0.40f);
     struct Wings { float width; float length; float thickness; juce::Colour colour; };
     const std::array<Wings, 2> bands {{
         { upperWidth, wingLength, 2.5f, widthColour(upperWidth).withAlpha(soloBass ? 0.25f : 0.9f) },
@@ -790,10 +801,10 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         }
     }
     const auto& lowerTrack = correlationTracks_[1];
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     for (const auto& [mark, text] : { std::pair{ -1.0f, "-1" }, std::pair{ 0.0f, "0" }, std::pair{ 1.0f, "+1" } }) {
         const juce::Point<float> under(lowerTrack.getCentreX() + mark * lowerTrack.getWidth() * 0.5f, lowerTrack.getBottom() + 12.0f);
-        g.drawText(text, juce::Rectangle<float>(24.0f, 12.0f).withCentre(under), juce::Justification::centred);
+        g.drawText(text, juce::Rectangle<float>(28.0f, 14.0f).withCentre(under), juce::Justification::centred);
     }
 
     g.setFont(juce::FontOptions(11.0f));
@@ -816,7 +827,7 @@ void BassSpaceEditor::resized() {
 
     auto area = getLocalBounds().reduced(12, 8);
     headerArea_ = area.removeFromTop(32);
-    badgeArea_ = headerArea_.withSizeKeepingCentre(juce::jmin(210, headerArea_.getWidth() / 3), 20);
+    badgeArea_ = headerArea_.withSizeKeepingCentre(juce::jmin(240, headerArea_.getWidth() / 3), 24);
     area.removeFromTop(6);
     suiteStrip_.setBounds(area.removeFromTop(44));
     area.removeFromTop(6);
@@ -835,9 +846,10 @@ void BassSpaceEditor::resized() {
     placeKnob(left.removeFromTop(left.getHeight() / 2), freqLabel_, freqSlider_);
     placeKnob(left, stereoizeLabel_, stereoizeSlider_);
     placeKnob(right.removeFromTop(right.getHeight() / 2), widthLabel_, widthSlider_);
+    upperMutedChip_.setBounds(right.removeFromTop(24).withSizeKeepingCentre(juce::jmin(140, right.getWidth() - 12), 20));
     placeKnob(right, upperWidthLabel_, upperWidthSlider_);
 
-    const int masterH = juce::jlimit(118, 176, center.getHeight() * 2 / 5);
+    const int masterH = juce::jlimit(136, 196, center.getHeight() * 2 / 5);
     masterArea_ = center.removeFromBottom(masterH);
     fieldArea_ = center;
 
@@ -857,13 +869,14 @@ void BassSpaceEditor::resized() {
     ringArea_ = field.reduced(4, 2);
     stereoFieldAnchor_.setBounds(ringArea_);
 
-    auto cells = masterArea_.reduced(4, 6);
-    auto buttonColumn = cells.removeFromRight(juce::jmax(148, cells.getWidth() / 4));
+    auto cells = masterArea_.reduced(10, 6);
+    auto buttonColumn = cells.removeFromRight(juce::jlimit(134, 152, cells.getWidth() / 4));
+    cells.removeFromRight(8);
     const int cellW = cells.getWidth() / 3;
     placeKnob(cells.removeFromLeft(cellW), subDriveLabel_, subDriveSlider_);
     placeKnob(cells.removeFromLeft(cellW), outputDbLabel_, outputDbSlider_);
-    placeKnob(cells, upperTiltLabel_, upperTiltSlider_);
-    buttonColumn = buttonColumn.withSizeKeepingCentre(buttonColumn.getWidth() - 8, kButtonHeight * 3 + 12);
+    placeKnob(cells.removeFromLeft(cellW), upperTiltLabel_, upperTiltSlider_);
+    buttonColumn = buttonColumn.withSizeKeepingCentre(buttonColumn.getWidth(), kButtonHeight * 3 + 12);
     soloLowButton_.setBounds(buttonColumn.removeFromTop(kButtonHeight));
     buttonColumn.removeFromTop(6);
     slopeButton_.setBounds(buttonColumn.removeFromTop(kButtonHeight));
