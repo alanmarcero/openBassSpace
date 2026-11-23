@@ -68,14 +68,18 @@ void placeKnob(juce::Rectangle<int> cell, juce::Label& name, juce::Slider& slide
     const int dial = juce::jlimit(48, cell.getWidth(), cell.getHeight() - kNameHeight - kValueHeight - 2 * kKnobMargin);
     auto group = cell.withSizeKeepingCentre(cell.getWidth(), kNameHeight + dial + kValueHeight);
     name.setBounds(group.removeFromTop(kNameHeight));
-    slider.setBounds(group.withSizeKeepingCentre(dial, group.getHeight()));
+    slider.setBounds(group);
 }
 
 void drawPadlock(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colour colour) {
-    const float bodyHeight = bounds.getHeight() * 0.56f;
-    const auto body = bounds.withTop(bounds.getBottom() - bodyHeight);
-    const auto shackle = juce::Rectangle<float>(bounds.getWidth() * 0.64f, bounds.getHeight() * 0.54f)
-                             .withCentre({ bounds.getCentreX(), body.getY() });
+    g.setColour(kBackground.withAlpha(0.88f));
+    g.fillRoundedRectangle(bounds.expanded(2.0f, 1.5f), 3.0f);
+
+    const auto inner = bounds.reduced(0.5f, 1.0f);
+    const float bodyHeight = inner.getHeight() * 0.56f;
+    const auto body = inner.withTop(inner.getBottom() - bodyHeight);
+    const auto shackle = juce::Rectangle<float>(inner.getWidth() * 0.64f, inner.getHeight() * 0.54f)
+                             .withCentre({ inner.getCentreX(), body.getY() });
 
     juce::Path shacklePath;
     shacklePath.addArc(shackle.getX(), shackle.getY(), shackle.getWidth(), shackle.getHeight(),
@@ -96,6 +100,8 @@ juce::Label* BassSpaceTheme::createSliderTextBox(juce::Slider& slider) {
     box->setFont(juce::FontOptions(15.0f, juce::Font::bold));
     box->setColour(juce::TextEditor::backgroundColourId, kBackground);
     box->setColour(juce::TextEditor::focusedOutlineColourId, kAccentMint);
+    box->setColour(juce::Label::backgroundWhenEditingColourId, kBackground);
+    box->setColour(juce::Label::outlineWhenEditingColourId, kAccentMint);
     return box;
 }
 
@@ -113,15 +119,45 @@ void BassSpaceTheme::drawRotarySlider(juce::Graphics& g, int x, int y, int width
 
 void BassSpaceTheme::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& background,
                                           bool highlighted, bool down) {
+    const bool disabled = !button.isEnabled();
+    if (disabled) {
+        g.beginTransparencyLayer(0.4f);
+    }
     juce::LookAndFeel_V4::drawButtonBackground(g, button, background, highlighted, down);
     if (static_cast<bool>(button.getProperties().getWithDefault("paramLocked", false))) {
         const auto bounds = button.getLocalBounds().toFloat();
-        const auto colour = button.getToggleState() ? kBackground : kAccentGold;
-        drawPadlock(g, { bounds.getRight() - 13.0f, bounds.getY() + 3.0f, 9.0f, 11.0f }, colour);
+        drawPadlock(g, { bounds.getRight() - 13.0f, bounds.getY() + 3.0f, 9.0f, 11.0f }, kAccentGold);
     }
     if (button.hasKeyboardFocus(false)) {
         g.setColour(kAccentMint);
         g.drawRoundedRectangle(button.getLocalBounds().toFloat().reduced(1.5f), 6.0f, 2.0f);
+    }
+    if (disabled) {
+        g.endTransparencyLayer();
+    }
+}
+
+void BassSpaceTheme::drawButtonText(juce::Graphics& g, juce::TextButton& button,
+                                    bool /*shouldDrawButtonAsHighlighted*/, bool /*shouldDrawButtonAsDown*/) {
+    const auto font = getTextButtonFont(button, button.getHeight());
+    g.setFont(font);
+    g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
+                                                          : juce::TextButton::textColourOffId)
+                    .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
+
+    const int yIndent = juce::jmin(4, button.proportionOfHeight(0.3f));
+    const int cornerSize = juce::jmin(button.getHeight(), button.getWidth()) / 2;
+    const int fontHeight = juce::roundToInt(font.getHeight() * 0.6f);
+    const int leftIndent = juce::jmin(fontHeight, 2 + cornerSize / (button.isConnectedOnLeft() ? 4 : 2));
+    int rightIndent = juce::jmin(fontHeight, 2 + cornerSize / (button.isConnectedOnRight() ? 4 : 2));
+    if (static_cast<bool>(button.getProperties().getWithDefault("paramLocked", false))) {
+        rightIndent = juce::jmax(rightIndent, 16);
+    }
+
+    const int textWidth = button.getWidth() - leftIndent - rightIndent;
+    if (textWidth > 0) {
+        g.drawFittedText(button.getButtonText(), leftIndent, yIndent, textWidth,
+                         button.getHeight() - yIndent * 2, juce::Justification::centred, 2);
     }
 }
 
@@ -146,6 +182,16 @@ void FineSlider::mouseDrag(const juce::MouseEvent& e) {
     dragPosition_ += (e.position - lastMouse_) * speed;
     lastMouse_ = e.position;
     juce::Slider::mouseDrag(e.withNewPosition(dragPosition_));
+}
+
+void FineSlider::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) {
+    if (onWheelCoalescing) {
+        onWheelCoalescing(true);
+    }
+    juce::Slider::mouseWheelMove(e, wheel);
+    if (onWheelCoalescing) {
+        onWheelCoalescing(false);
+    }
 }
 
 // Arrow keys step 1% of the range, or one interval with Shift. Page Up and Page Down step 10%.
@@ -294,16 +340,18 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
     ellipticalAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor_.parameters, bass_space::params::kElliptical, ellipticalButton_);
 
-    const auto bindSliderMenu = [this](FineSlider& slider, const char* paramId) {
+    const auto bindSliderMenu = [this](FineSlider& slider, juce::Label& label, const char* paramId) {
         slider.onPopupMenu = [this, &slider, paramId] { showParamLockMenu(paramId, slider); };
+        slider.onWheelCoalescing = [this](bool active) { processor_.setWheelCoalescing(active); };
+        label.addMouseListener(&slider, false);
     };
-    bindSliderMenu(freqSlider_, bass_space::params::kFrequency);
-    bindSliderMenu(widthSlider_, bass_space::params::kWidth);
-    bindSliderMenu(upperWidthSlider_, bass_space::params::kUpperWidth);
-    bindSliderMenu(stereoizeSlider_, bass_space::params::kStereoize);
-    bindSliderMenu(outputDbSlider_, bass_space::params::kOutputDb);
-    bindSliderMenu(subDriveSlider_, bass_space::params::kSubDrive);
-    bindSliderMenu(upperTiltSlider_, bass_space::params::kUpperTilt);
+    bindSliderMenu(freqSlider_, freqLabel_, bass_space::params::kFrequency);
+    bindSliderMenu(widthSlider_, widthLabel_, bass_space::params::kWidth);
+    bindSliderMenu(upperWidthSlider_, upperWidthLabel_, bass_space::params::kUpperWidth);
+    bindSliderMenu(stereoizeSlider_, stereoizeLabel_, bass_space::params::kStereoize);
+    bindSliderMenu(outputDbSlider_, outputDbLabel_, bass_space::params::kOutputDb);
+    bindSliderMenu(subDriveSlider_, subDriveLabel_, bass_space::params::kSubDrive);
+    bindSliderMenu(upperTiltSlider_, upperTiltLabel_, bass_space::params::kUpperTilt);
 
     const auto bindButtonMenu = [this](alanmarcero::suite::PopupTextButton& button, const char* paramId) {
         button.onPopupMenu = [this, &button, paramId] { showParamLockMenu(paramId, button); };
@@ -314,6 +362,9 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
 
     presetBrowser_.onChanged = [this] { suiteStrip_.refresh(); };
     presetBrowser_.onSaved = [this](const juce::String& name) { processor_.markPresetSaved(name); };
+    presetBrowser_.onRenamed = [this](const juce::String& oldName, const juce::String& newName) {
+        processor_.markPresetRenamed(oldName, newName);
+    };
     alanmarcero::suite::SuiteActions actions;
     actions.undo = [this] { processor_.undo(); suiteStrip_.refresh(); };
     actions.redo = [this] { processor_.redo(); suiteStrip_.refresh(); };
@@ -336,6 +387,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
         if (presetBrowser_.isVisible()) {
             processor_.presetLibrary().rescan();
             presetBrowser_.refresh();
+            presetBrowser_.selectPreset(processor_.currentPresetName());
             presetBrowser_.toFront(true);
             positionPresetBrowser();
         }
@@ -358,7 +410,40 @@ BassSpaceEditor::~BassSpaceEditor() {
 }
 
 bool BassSpaceEditor::keyPressed(const juce::KeyPress& key) {
+    if (key.isKeyCode(juce::KeyPress::escapeKey) && presetBrowser_.isVisible()) {
+        return presetBrowser_.keyPressed(key);
+    }
+
     const auto code = key.getKeyCode();
+    const bool lockMenuShortcut = (key.isKeyCode(juce::KeyPress::F10Key) && key.getModifiers().isShiftDown())
+        || ((code == 'l' || code == 'L') && key.getModifiers().isCommandDown() && !key.getModifiers().isAltDown());
+    if (lockMenuShortcut) {
+        if (auto* focused = juce::Component::getCurrentlyFocusedComponent()) {
+            const std::pair<const char*, juce::Component*> controls[] = {
+                { bass_space::params::kFrequency, &freqSlider_ },
+                { bass_space::params::kWidth, &widthSlider_ },
+                { bass_space::params::kUpperWidth, &upperWidthSlider_ },
+                { bass_space::params::kStereoize, &stereoizeSlider_ },
+                { bass_space::params::kOutputDb, &outputDbSlider_ },
+                { bass_space::params::kSubDrive, &subDriveSlider_ },
+                { bass_space::params::kUpperTilt, &upperTiltSlider_ },
+                { bass_space::params::kSoloLow, &soloLowButton_ },
+                { bass_space::params::kSlope, &slopeButton_ },
+                { bass_space::params::kElliptical, &ellipticalButton_ },
+            };
+            for (const auto& [paramId, control] : controls) {
+                if (focused == control || control->isParentOf(focused)) {
+                    showParamLockMenu(paramId, *control);
+                    return true;
+                }
+            }
+            if (focused->getComponentID() == "bypassButton") {
+                showParamLockMenu(bass_space::params::kBypass, *focused);
+                return true;
+            }
+        }
+    }
+
     const bool undoKey = code == 'z' || code == 'Z';
     const bool redoKey = code == 'y' || code == 'Y';
     if (!key.getModifiers().isCommandDown() || key.getModifiers().isAltDown()) {
@@ -385,7 +470,6 @@ bool BassSpaceEditor::keyPressed(const juce::KeyPress& key) {
 void BassSpaceEditor::refreshDisplay() {
     updateMeter();
     suiteStrip_.refresh();
-    syncLockIndicators();
 
     // Solo bass mutes the upper band, so its dials draw dim and their tooltips say how to hear them.
     const bool soloBass = processor_.currentSoloLow();
@@ -400,6 +484,7 @@ void BassSpaceEditor::refreshDisplay() {
             name->setAlpha(soloBass ? 0.4f : 1.0f);
         }
     }
+    syncLockIndicators();
 
     const std::array<float, 6> field { processor_.artworkPhase(), processor_.currentWidth(), processor_.currentUpperWidth(),
                                        processor_.currentFrequency(), processor_.currentStereoize(),
@@ -457,9 +542,17 @@ void BassSpaceEditor::showParamLockMenu(const juce::String& paramId, juce::Compo
     }
 
     const bool locked = processor_.isParamLocked(paramId);
+    const juce::String lockedSuffix = " (Locked)";
+    auto label = target.getTitle();
+    if (label.endsWith(lockedSuffix)) {
+        label = label.dropLastCharacters(lockedSuffix.length());
+    }
+    if (label.isEmpty()) {
+        label = param->getName(64);
+    }
     juce::PopupMenu menu;
     menu.setLookAndFeel(&theme_);
-    menu.addItem(1, (locked ? "Unlock " : "Lock ") + param->getName(64));
+    menu.addItem(1, (locked ? "Unlock " : "Lock ") + label);
     if (processor_.hasAnyLockedParams()) {
         menu.addSeparator();
         menu.addItem(2, "Unlock all parameters");
@@ -495,11 +588,20 @@ void BassSpaceEditor::syncLockIndicators() {
         { bass_space::params::kElliptical, &ellipticalButton_ },
     };
 
+    const auto syncSuffix = [](const juce::String& text, bool locked) {
+        const juce::String suffix = " (Locked)";
+        const auto base = text.endsWith(suffix) ? text.dropLastCharacters(suffix.length()) : text;
+        return locked ? (base + suffix) : base;
+    };
+
     for (const auto& [paramId, control] : controls) {
         const bool locked = processor_.isParamLocked(paramId);
         if (static_cast<bool>(control->getProperties().getWithDefault("paramLocked", false)) != locked) {
             control->getProperties().set("paramLocked", locked);
             control->repaint();
+        }
+        if (auto* tip = dynamic_cast<juce::SettableTooltipClient*>(control)) {
+            tip->setTooltip(syncSuffix(tip->getTooltip(), locked));
         }
     }
 }
@@ -645,15 +747,27 @@ void BassSpaceEditor::paint(juce::Graphics& g) {
         }
         return upper + " + STEREOIZE " + parameters.getParameter(bass_space::params::kStereoize)->getCurrentValueAsText();
     }();
-    const juce::Font captionFont(juce::FontOptions(10.5f, juce::Font::bold));
-    juce::AttributedString caption;
-    caption.setJustification(juce::Justification::centred);
-    caption.append("BASS " + widthCaption(*parameters.getParameter(bass_space::params::kWidth)) + " below "
-                       + parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText(),
-                   captionFont, widthColour(bassWidth));
-    caption.append("  |  ", captionFont, kTextDim);
-    caption.append(upperCaption, captionFont, widthColour(upperWidth).withAlpha(soloBass ? 0.6f : 1.0f));
-    caption.draw(g, ringArea_.toFloat().removeFromBottom(16.0f));
+    const auto captionArea = ringArea_.toFloat().removeFromBottom(16.0f);
+    const auto buildCaption = [&](float fontSize) {
+        const juce::Font captionFont(juce::FontOptions(fontSize, juce::Font::bold));
+        juce::AttributedString text;
+        text.setJustification(juce::Justification::centred);
+        text.setWordWrap(juce::AttributedString::none);
+        text.append("BASS " + widthCaption(*parameters.getParameter(bass_space::params::kWidth)) + " below "
+                        + parameters.getParameter(bass_space::params::kFrequency)->getCurrentValueAsText(),
+                    captionFont, widthColour(bassWidth));
+        text.append("  |  ", captionFont, kTextDim);
+        text.append(upperCaption, captionFont, widthColour(upperWidth).withAlpha(soloBass ? 0.6f : 1.0f));
+        return text;
+    };
+    auto caption = buildCaption(10.5f);
+    juce::TextLayout layout;
+    layout.createLayout(caption, 10000.0f);
+    if (layout.getWidth() > captionArea.getWidth() - 4.0f && layout.getWidth() > 0.0f) {
+        const float scaled = juce::jlimit(7.5f, 10.5f, 10.5f * ((captionArea.getWidth() - 4.0f) / layout.getWidth()));
+        caption = buildCaption(scaled);
+    }
+    caption.draw(g, captionArea);
 
     const std::array<std::pair<juce::Rectangle<float>, float>, 2> bars {{
         { correlationTracks_[0], processor_.currentCorrelation() },

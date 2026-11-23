@@ -114,6 +114,7 @@ public:
     void redo();
     [[nodiscard]] bool canUndo() const;
     [[nodiscard]] bool canRedo() const;
+    void setWheelCoalescing(bool active) noexcept { history_.setWheelCoalescing(active); }
 
     [[nodiscard]] int activeCompareSlot() const noexcept { return activeSlot_; }
     void selectCompareSlot(int slot);
@@ -124,6 +125,7 @@ public:
     [[nodiscard]] bool isPresetEdited() const noexcept { return presetEdited_.load(std::memory_order_relaxed); }
     void loadPreset(const alanmarcero::suite::PresetEntry& preset);
     void markPresetSaved(const juce::String& name);
+    void markPresetRenamed(const juce::String& oldName, const juce::String& newName);
     // Loads the preset before or after the current one in the browser's order, wrapping at the ends.
     void stepPreset(int delta);
     [[nodiscard]] alanmarcero::suite::ParameterSnapshot currentParameterValues() const;

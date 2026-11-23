@@ -30,13 +30,14 @@ public:
     void clear(int activeSlot);
 
     [[nodiscard]] bool isApplying() const noexcept { return applying_; }
+    void setWheelCoalescing(bool active) noexcept { wheelCoalescing_ = active; }
 
 private:
     class SnapshotAction;
 
     void parameterValueChanged(int parameterIndex, float newValue) override;
     void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
-    void commit(const juce::String& name, const Memory& before, const Memory& after);
+    void commit(const juce::String& name, const Memory& before, const Memory& after, bool coalesce = false);
     [[nodiscard]] bool onMessageThread() const;
 
     juce::AudioProcessor& processor_;
@@ -46,6 +47,11 @@ private:
     int activeSlot_ = 0;
     Memory gestureStart_;
     int gestureDepth_ = 0;
+    int lastParameterIndex_ = -1;
+    int lastParameterSlot_ = -1;
+    juce::uint32 lastCommitMs_ = 0;
+    bool wheelCoalescing_ = false;
+    bool lastWasWheel_ = false;
     bool applying_ = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SuiteHistory)

@@ -12,12 +12,15 @@ public:
                           float startAngle, float endAngle, juce::Slider& slider) override;
     void drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& background,
                               bool highlighted, bool down) override;
+    void drawButtonText(juce::Graphics& g, juce::TextButton& button,
+                        bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 };
 
 class FineSlider final : public juce::Slider {
 public:
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
     bool keyPressed(const juce::KeyPress& key) override;
     void setTooltip(const juce::String& newTooltip) override;
     void childrenChanged() override;
@@ -25,6 +28,7 @@ public:
     void focusLost(FocusChangeType) override { repaint(); }
 
     std::function<void()> onPopupMenu;
+    std::function<void(bool)> onWheelCoalescing;
 
 private:
     juce::Point<float> lastMouse_;

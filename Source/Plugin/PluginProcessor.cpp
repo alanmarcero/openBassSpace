@@ -307,6 +307,21 @@ void BassSpaceProcessor::markPresetSaved(const juce::String& name) {
     presetEdited_.store(false, std::memory_order_relaxed);
 }
 
+void BassSpaceProcessor::markPresetRenamed(const juce::String& oldName, const juce::String& newName) {
+    const auto trimmed = newName.trim();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+    if (currentPresetName_.equalsIgnoreCase(oldName)) {
+        currentPresetName_ = trimmed;
+    }
+    for (auto& slot : slots_) {
+        if (slot.presetName.equalsIgnoreCase(oldName)) {
+            slot.presetName = trimmed;
+        }
+    }
+}
+
 void BassSpaceProcessor::stepPreset(int delta) {
     presets_.rescan();
     const auto list = presets_.filtered({});

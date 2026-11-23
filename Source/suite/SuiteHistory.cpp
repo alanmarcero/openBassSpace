@@ -68,10 +68,14 @@ void SuiteHistory::clear(int activeSlot) {
 void SuiteHistory::selectSlot(int slot) {
     gestureDepth_ = 0;
     gestureStart_ = {};
+    lastParameterIndex_ = -1;
     activeSlot_ = slot;
 }
 
 void SuiteHistory::clearSlot(int slot) {
+    if (slot == lastParameterSlot_) {
+        lastParameterIndex_ = -1;
+    }
     histories_[static_cast<size_t>(slot)].clearUndoHistory();
 }
 
@@ -91,15 +95,18 @@ void SuiteHistory::performMutation(const juce::String& name, const std::function
         const juce::ScopedValueSetter<bool> guard(applying_, true);
         mutate();
     }
+    lastParameterIndex_ = -1;
     commit(name, before, capture_());
 }
 
-void SuiteHistory::commit(const juce::String& name, const Memory& before, const Memory& after) {
+void SuiteHistory::commit(const juce::String& name, const Memory& before, const Memory& after, bool coalesce) {
     if (!before.isValid() || before.isEquivalentTo(after)) {
         return;
     }
 
-    activeHistory().beginNewTransaction(name);
+    if (!coalesce) {
+        activeHistory().beginNewTransaction(name);
+    }
     activeHistory().perform(new SnapshotAction(*this, before.createCopy(), after.createCopy()));
 }
 
@@ -136,7 +143,17 @@ void SuiteHistory::parameterGestureChanged(int parameterIndex, bool gestureIsSta
     }
     const auto start = gestureStart_;
     gestureStart_ = {};
-    commit(name, start, capture_());
+    const auto now = juce::Time::getMillisecondCounter();
+    const bool coalesce = wheelCoalescing_ && lastWasWheel_
+        && lastParameterIndex_ == parameterIndex
+        && lastParameterSlot_ == activeSlot_
+        && (now - lastCommitMs_) <= 400
+        && activeHistory().canUndo();
+    lastParameterIndex_ = parameterIndex;
+    lastParameterSlot_ = activeSlot_;
+    lastCommitMs_ = now;
+    lastWasWheel_ = wheelCoalescing_;
+    commit(name, start, capture_(), coalesce);
 }
 
 } // namespace alanmarcero::suite

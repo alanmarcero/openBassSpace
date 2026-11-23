@@ -51,6 +51,21 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
         disarm();
         updateButtons();
     };
+    name_.onReturnKey = [this] {
+        if (save_.isEnabled()) {
+            save_.triggerClick();
+        }
+    };
+    const auto handleEscape = [this] {
+        if (armed_ != nullptr) {
+            disarm();
+            return;
+        }
+        setVisible(false);
+    };
+    search_.onEscapeKey = handleEscape;
+    name_.onEscapeKey = handleEscape;
+    setWantsKeyboardFocus(true);
 
     list_.setColour(juce::ListBox::backgroundColourId, kBackground);
     list_.setColour(juce::ListBox::outlineColourId, kEdge);
@@ -88,8 +103,13 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
     rename_.onClick = [this] {
         disarm();
         if (const auto* entry = selected()) {
-            if (!entry->factory && library_.renameUser(entry->name, name_.getText())) {
+            const auto oldName = entry->name;
+            const auto newName = name_.getText().trim();
+            if (!entry->factory && library_.renameUser(oldName, newName)) {
                 refresh();
+                if (onRenamed) {
+                    onRenamed(oldName, newName);
+                }
                 if (onChanged) {
                     onChanged();
                 }
@@ -127,6 +147,7 @@ PresetBrowser::PresetBrowser(PresetLibrary& library,
 
 // Deselects a preset the filter hides, so Rename and Delete never reach the row that takes its index.
 void PresetBrowser::refresh() {
+    disarm();
     const auto* current = selected();
     const auto selectedName = current != nullptr ? current->name : juce::String();
     const bool selectedFactory = current != nullptr && current->factory;
@@ -138,6 +159,21 @@ void PresetBrowser::refresh() {
     list_.deselectAllRows();
     if (kept != shown_.end()) {
         list_.selectRow(static_cast<int>(kept - shown_.begin()));
+    }
+    updateButtons();
+    repaint();
+}
+
+void PresetBrowser::selectPreset(const juce::String& name) {
+    const auto match = std::find_if(shown_.begin(), shown_.end(), [&](const PresetEntry& entry) {
+        return entry.name.equalsIgnoreCase(name);
+    });
+    if (match != shown_.end()) {
+        const int row = static_cast<int>(match - shown_.begin());
+        list_.selectRow(row);
+        list_.scrollToEnsureRowIsOnscreen(row);
+    } else {
+        list_.deselectAllRows();
     }
     updateButtons();
     repaint();
@@ -190,7 +226,28 @@ void PresetBrowser::listBoxItemDoubleClicked(int row, const juce::MouseEvent&) {
 
 void PresetBrowser::selectedRowsChanged(int) {
     disarm();
+    if (const auto* entry = selected(); entry != nullptr && !entry->factory) {
+        name_.setText(entry->name, juce::dontSendNotification);
+    }
     updateButtons();
+}
+
+void PresetBrowser::visibilityChanged() {
+    if (!isVisible()) {
+        disarm();
+    }
+}
+
+bool PresetBrowser::keyPressed(const juce::KeyPress& key) {
+    if (key.isKeyCode(juce::KeyPress::escapeKey)) {
+        if (armed_ != nullptr) {
+            disarm();
+        } else {
+            setVisible(false);
+        }
+        return true;
+    }
+    return false;
 }
 
 void PresetBrowser::timerCallback() {
@@ -323,6 +380,12 @@ void SuiteStrip::refresh() {
         bypassButton_.getProperties().set("paramLocked", bypassLocked);
         bypassButton_.repaint();
     }
+    const auto syncLockSuffix = [bypassLocked](const juce::String& text) {
+        const juce::String suffix = " (Locked)";
+        const auto base = text.endsWith(suffix) ? text.dropLastCharacters(suffix.length()) : text;
+        return bypassLocked ? (base + suffix) : base;
+    };
+    bypassButton_.setTooltip(syncLockSuffix(bypassButton_.getTooltip()));
     for (auto* button : { &undoButton_, &redoButton_, &copyAtoB_, &copyBtoA_, &presetButton_, &previousPreset_, &nextPreset_ }) {
         styleButton(*button, false);
     }

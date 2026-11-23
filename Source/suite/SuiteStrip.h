@@ -47,11 +47,15 @@ public:
                   std::function<void(const PresetEntry&)> load);
 
     void refresh();
+    void selectPreset(const juce::String& name);
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void visibilityChanged() override;
+    bool keyPressed(const juce::KeyPress& key) override;
 
     std::function<void()> onChanged;
     std::function<void(const juce::String&)> onSaved;
+    std::function<void(const juce::String&, const juce::String&)> onRenamed;
 
 private:
     int getNumRows() override;
