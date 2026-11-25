@@ -53,4 +53,4 @@ VST3, Audio Unit (AU), standalone.
 
 ## License
 
-MIT. [LICENSE](LICENSE).
+AGPL-3.0. [LICENSE](LICENSE).
