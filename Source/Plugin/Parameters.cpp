@@ -7,6 +7,11 @@ juce::String percentText(float percent, int) {
     return juce::String(juce::roundToInt(percent)) + "%";
 }
 
+juce::String signedPercentText(float percent, int) {
+    const int rounded = juce::roundToInt(percent);
+    return (rounded > 0 ? "+" : "") + juce::String(rounded) + "%";
+}
+
 // Rounding first stops values near zero from reading "-0.0 dB".
 juce::String decibelText(float decibels, int) {
     const float tenths = std::round(decibels * 10.0f) / 10.0f;
@@ -22,6 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
     const auto percent = juce::AudioParameterFloatAttributes().withStringFromValueFunction(percentText);
     const auto decibels = juce::AudioParameterFloatAttributes().withStringFromValueFunction(decibelText);
+    const auto signedPercent = juce::AudioParameterFloatAttributes().withStringFromValueFunction(signedPercentText);
 
     // Frequency: 20 Hz to 500 Hz, default 120 Hz, skewed to emphasize 60-200 Hz
     auto freqRange = juce::NormalisableRange<float>(20.0f, 500.0f, 0.5f, 0.45f);
@@ -75,10 +81,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ kSubDrive, 2 },
-        "Sub Drive",
-        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
+        "Sub Level",
+        juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f),
         0.0f,
-        percent
+        signedPercent
     ));
 
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(

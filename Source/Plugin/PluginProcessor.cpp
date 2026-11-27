@@ -459,7 +459,7 @@ void BassSpaceProcessor::restoreParameterTree(juce::ValueTree tree) {
     };
     ensureDefault(bass_space::params::kUpperWidth, 100.0f);
     ensureDefault(bass_space::params::kStereoize, 0.0f);
-    ensureDefault(bass_space::params::kSubDrive, 0.0f);
+    ensureDefault(bass_space::params::kSubDrive, 0.0f); // Sub Level; ID kept for saved sessions
     ensureDefault(bass_space::params::kUpperTilt, 0.0f);
     ensureDefault(bass_space::params::kSoloLow, 0.0f);
     ensureDefault(bass_space::params::kBypass, 0.0f);

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.8.0
+
+- **Sub Level:** Sub Drive is now a single bipolar knob. Right of center adds sub drive as before; left of center turns the bass band down, to the bass band fully removed at −100%. Saved sessions and presets keep their values.
+
 ## v2.7.3
 
 - Refines preset browsing, lock behavior, and editor details across the UI polish passes.

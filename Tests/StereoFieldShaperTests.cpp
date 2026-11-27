@@ -378,6 +378,44 @@ TEST_CASE("Sub drive synthesizes octave-down f/2 sub-harmonic and warm even harm
     REQUIRE(highEnergy < 0.001f);
 }
 
+TEST_CASE("Negative sub level turns the bass band down and leaves the upper band alone", "[stereo][subdrive]") {
+    constexpr double fs = 48000.0;
+    constexpr int numSamples = 16384;
+
+    const auto bassAndHighMagnitude = [&](float subLevel, bool sideOnlySplit) {
+        StereoFieldShaper shaper;
+        shaper.prepare(fs);
+        shaper.setCrossoverFrequency(130.0);
+        shaper.setWidth(1.0f);
+        shaper.setEllipticalMode(sideOnlySplit);
+        shaper.setSubDrive(subLevel);
+
+        std::vector<float> left(numSamples);
+        std::vector<float> right(numSamples);
+        for (int idx = 0; idx < numSamples; ++idx) {
+            const double bass = std::sin(2.0 * std::numbers::pi * 60.0 * idx / fs);
+            const double high = std::sin(2.0 * std::numbers::pi * 4000.0 * idx / fs);
+            left[idx] = right[idx] = static_cast<float>(0.3 * bass + 0.2 * high);
+        }
+        shaper.processBlock(left.data(), right.data(), numSamples);
+        return std::pair{ measureToneMagnitude(left.data(), 4096, 12000, 60.0, fs),
+                          measureToneMagnitude(left.data(), 4096, 12000, 4000.0, fs) };
+    };
+
+    for (const bool sideOnlySplit : { false, true }) {
+        const auto [flatBass, flatHigh] = bassAndHighMagnitude(0.0f, sideOnlySplit);
+        const auto [halfBass, halfHigh] = bassAndHighMagnitude(-0.5f, sideOnlySplit);
+        const auto [mutedBass, mutedHigh] = bassAndHighMagnitude(-1.0f, sideOnlySplit);
+
+        REQUIRE(halfBass < flatBass * 0.65);
+        REQUIRE(halfBass > flatBass * 0.35);
+        // The 24 dB/oct high band still passes about 4% of a 60 Hz tone, so full cut is not absolute silence.
+        REQUIRE(mutedBass < flatBass * 0.06);
+        REQUIRE_THAT(halfHigh, WithinAbs(flatHigh, flatHigh * 0.05));
+        REQUIRE_THAT(mutedHigh, WithinAbs(flatHigh, flatHigh * 0.05));
+    }
+}
+
 TEST_CASE("Sub drive contains upper midrange harmonic leakage and preserves crossover phase", "[stereo][subdrive]") {
     constexpr double fs = 48000.0;
     constexpr double fundamentalHz = 110.0;

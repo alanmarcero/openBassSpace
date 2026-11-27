@@ -300,7 +300,7 @@ void StereoFieldShaper::setStereoizeAmount(float amount) noexcept {
 }
 
 void StereoFieldShaper::setSubDrive(float drive) noexcept {
-    targetSubDrive_ = std::clamp(drive, 0.0f, 1.0f);
+    targetSubDrive_ = std::clamp(drive, -1.0f, 1.0f);
     if (!hasProcessedAudio_) {
         currentSubDrive_ = targetSubDrive_;
     }
@@ -441,6 +441,10 @@ void StereoFieldShaper::processStereoFrame(float dryL, float dryR, float& wetL, 
         updateTiltCoefficients(currentUpperTiltDb_);
     }
 
+    // One bipolar knob: positive adds sub drive, negative turns the bass band down toward silence.
+    const float subDrive = std::max(currentSubDrive_, 0.0f);
+    const float bassGain = 1.0f + std::min(currentSubDrive_, 0.0f);
+
     const float highMix = 1.0f - currentSoloGain_;
     const float widenBlend = std::clamp(currentWidth_ - 1.0f, 0.0f, 1.0f);
 
@@ -477,13 +481,14 @@ void StereoFieldShaper::processStereoFrame(float dryL, float dryR, float& wetL, 
         const float ellipMidLow = static_cast<float>(vEllip * ellipMidLpG_ + ellipMidLpState_);
         ellipMidLpState_ = static_cast<double>(ellipMidLow) + vEllip * ellipMidLpG_;
 
-        const float drivenLow = synthesizeDrivenBass(ellipMidLow, currentSubDrive_);
-        float shapedMid = rawMid + currentSubDrive_ * (drivenLow - ellipMidLow);
+        const float drivenLow = synthesizeDrivenBass(ellipMidLow, subDrive);
+        // Cutting bass crossfades the Mid toward its crossover high band, since the 1st-order extraction is too gentle to remove bass.
+        float shapedMid = rawMid + subDrive * (drivenLow - ellipMidLow) + (1.0f - bassGain) * (splitA.high - rawMid);
         if (std::abs(currentUpperTiltDb_) > 1e-5f) {
             shapedMid = tiltFilterL_.process(shapedMid);
         }
 
-        const float soloMid = splitA.low * currentMonoMakeup_ + currentSubDrive_ * (drivenLow - splitA.low);
+        const float soloMid = bassGain * (splitA.low * currentMonoMakeup_ + subDrive * (drivenLow - splitA.low));
         finalMid = shapedMid * highMix + soloMid * currentSoloGain_;
 
         tiltedSideHigh = splitB.high;
@@ -495,14 +500,14 @@ void StereoFieldShaper::processStereoFrame(float dryL, float dryR, float& wetL, 
 
     if (!ellipticalMode_) {
         const float makeupMidLow = rawMidLow * currentMonoMakeup_;
-        const float drivenLow = synthesizeDrivenBass(makeupMidLow, currentSubDrive_);
+        const float drivenLow = synthesizeDrivenBass(makeupMidLow, subDrive);
         const float phaseMatchedDryLow = processFirstOrderTptAllpass(makeupMidLow, phaseMatchG_, lowPhaseApState_);
         const float phaseMatchedHighL = processFirstOrderTptAllpass(splitA.high, phaseMatchG_, highPhaseApStateL_);
         const float phaseMatchedHighR = processFirstOrderTptAllpass(splitB.high, phaseMatchG_, highPhaseApStateR_);
 
-        const float phaseAlignMix = std::clamp(currentSubDrive_ * 4.0f, 0.0f, 1.0f);
-        const float blendedDrivenLow = phaseMatchedDryLow + currentSubDrive_ * (drivenLow - phaseMatchedDryLow);
-        const float midLow = makeupMidLow + phaseAlignMix * (blendedDrivenLow - makeupMidLow);
+        const float phaseAlignMix = std::clamp(subDrive * 4.0f, 0.0f, 1.0f);
+        const float blendedDrivenLow = phaseMatchedDryLow + subDrive * (drivenLow - phaseMatchedDryLow);
+        const float midLow = bassGain * (makeupMidLow + phaseAlignMix * (blendedDrivenLow - makeupMidLow));
 
         const float alignedHighL = splitA.high + phaseAlignMix * (phaseMatchedHighL - splitA.high);
         const float alignedHighR = splitB.high + phaseAlignMix * (phaseMatchedHighR - splitB.high);
@@ -519,7 +524,7 @@ void StereoFieldShaper::processStereoFrame(float dryL, float dryR, float& wetL, 
     // Frequency-progressive 35 Hz Side HPF centers sub-40 Hz rumble when bass width > 100%
     const float anchoredSideLow = subSideAnchorHpf_.process(rawSideLow);
     const float progressiveSideLow = rawSideLow + widenBlend * (anchoredSideLow - rawSideLow);
-    const float baseSide = progressiveSideLow * currentWidth_ + highMix * (tiltedSideHigh * currentUpperWidth_);
+    const float baseSide = bassGain * progressiveSideLow * currentWidth_ + highMix * (tiltedSideHigh * currentUpperWidth_);
 
     wetL = finalMid + baseSide;
     wetR = finalMid - baseSide;

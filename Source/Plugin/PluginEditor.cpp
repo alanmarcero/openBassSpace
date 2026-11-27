@@ -280,8 +280,9 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
 
     configureKnob(outputDbSlider_, outputDbLabel_, "Output", kAccentMint,
                   "Set the plug-in output level in decibels.");
-    configureKnob(subDriveSlider_, subDriveLabel_, "Sub drive", kAccentMint,
-                  "Blend mono-locked sub-octave synthesis and ADAA saturation into the bass band.");
+    configureKnob(subDriveSlider_, subDriveLabel_, "Sub level", kAccentMint,
+                  "Turn right to blend mono-locked sub-octave synthesis and ADAA saturation into the bass band. "
+                  "Turn left to turn the bass band down.");
     configureKnob(upperTiltSlider_, upperTiltLabel_, "Upper tilt", kAccentGold,
                   "Tilt upper-band high frequencies (-6 dB dark to +6 dB air).");
 
@@ -291,7 +292,7 @@ BassSpaceEditor::BassSpaceEditor(BassSpaceProcessor& p)
                         "Switch the crossover slope between 24 dB and 48 dB per octave. 48 dB separates the bands more sharply.");
     configureModeButton(ellipticalButton_, kAccentMint, "Side-only split",
                         "Split only the Side at the crossover. The Mid passes unfiltered and keeps its phase "
-                        "while Sub drive and Upper tilt are at 0.");
+                        "while Sub level and Upper tilt are at 0.");
     slopeButton_.setComponentID("slopeButton");
     ellipticalButton_.setComponentID("sideOnlyButton");
 

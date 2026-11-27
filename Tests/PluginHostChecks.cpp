@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
     require(shown("output_db", 3.0f) == "+3.0 dB" && shown("output_db", -0.0001f) == "0.0 dB"
                 && shown("upper_tilt", -2.5f) == "-2.5 dB",
             "gain shows one decimal, a plus on boosts and never -0.0 dB");
-    require(shown("frequency", 120.0f) == "120 Hz" && shown("width", 55.0f) == "55%" && shown("sub_drive", 100.0f) == "100%",
+    require(shown("frequency", 120.0f) == "120 Hz" && shown("width", 55.0f) == "55%" && shown("sub_drive", 100.0f) == "+100%" && shown("sub_drive", -40.0f) == "-40%",
             "frequency and amounts show whole units");
 
     auto* outputDb = p.parameters.getParameter("output_db");
@@ -374,7 +374,7 @@ int main(int argc, char** argv) {
     require(hasVisibleLabel(*editor, "Bass width"), "Bass width section label is visible");
     require(hasVisibleLabel(*editor, "Upper width"), "Upper-band width section label is visible");
     require(hasVisibleLabel(*editor, "Stereoize"), "Stereoize section label is visible");
-    require(hasVisibleLabel(*editor, "Sub drive"), "Sub drive section label is visible");
+    require(hasVisibleLabel(*editor, "Sub level"), "Sub level section label is visible");
     require(hasVisibleLabel(*editor, "Upper tilt"), "Upper tilt section label is visible");
     require(hasVisibleLabel(*editor, "Correlation"), "Correlation meter label is visible");
     require(hasVisibleLabel(*editor, "Output"), "Output section label is visible");

@@ -16,7 +16,7 @@ All of these plugins are in beta. The macOS and Linux builds are not up to date,
 - **Width:** Bass stereo width below the crossover. 0% mono, 100% unchanged, 200% wider.
 - **Upper Width:** 0–200% above the crossover.
 - **Stereoize:** Adds width above the crossover. Bass stays centered (0–100%).
-- **Sub Drive:** Mono-locked harmonic saturation on the bass band (0–100%).
+- **Sub Level:** One knob for the bass band. Turn right (0 to +100%) for mono-locked harmonic saturation and sub-octave. Turn left (0 to −100%) to remove the bass band entirely.
 - **Upper Tilt:** Darkens or brightens the upper band, −6 dB to +6 dB.
 - **Solo Bass:** Auditions only the band below the crossover.
 - **Output:** Trim from −24 dB to +12 dB.
