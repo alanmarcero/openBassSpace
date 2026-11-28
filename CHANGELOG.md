@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.8.1
+
+- Checks zero-channel/zero-sample buffers before clearing output channels and slices oversized blocks to eliminate audio-thread `dryBuffer_` reallocations.
+
 ## v2.8.0
 
 - **Sub Level:** Sub Drive is now a single bipolar knob. Right of center adds sub drive as before; left of center turns the bass band down, to the bass band fully removed at −100%. Saved sessions and presets keep their values.
