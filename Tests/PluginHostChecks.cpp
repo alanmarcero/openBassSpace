@@ -553,9 +553,12 @@ int main(int argc, char** argv) {
         require(std::isfinite(monoAudio.getSample(0, i)), "Mono output is finite");
     }
 
-    // Audio test: Zero-channel/zero-sample safety
+    // Audio test: Zero-channel/zero-sample safety and large-block slice safety
     juce::AudioBuffer<float> emptyAudio(0, 0);
     p.processBlock(emptyAudio, midi);
+    juce::AudioBuffer<float> largeAudio(2, 8192);
+    largeAudio.clear();
+    p.processBlock(largeAudio, midi);
 
     // Enhancements test: Sub Drive, Upper Tilt, and Solo Bass
     {

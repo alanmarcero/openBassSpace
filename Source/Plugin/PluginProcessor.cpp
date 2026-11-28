@@ -51,6 +51,7 @@ BassSpaceProcessor::BassSpaceProcessor()
 
     currentProgram_ = 0;
     currentPresetName_ = bass_space::factoryPresets().front().name;
+    dryBuffer_.setSize(2, 4096, false, false, true);
     slots_[0] = captureSlot();
     slots_[1] = slots_[0];
 }
@@ -120,27 +121,23 @@ void BassSpaceProcessor::processAudio(juce::AudioBuffer<float>& buffer, juce::Mi
 
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
+    const int totalNumInputChannels = getTotalNumInputChannels();
+    const int totalNumOutputChannels = getTotalNumOutputChannels();
     auto* playHead = getPlayHead();
     artworkClock_.update(playHead ? playHead->getPosition() : juce::Optional<juce::AudioPlayHead::PositionInfo>{},
                          numSamples, processingRate_);
-    const int totalNumInputChannels = getTotalNumInputChannels();
-    const int totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i) {
-        buffer.clear(i, 0, numSamples);
-    }
 
     if (numChannels == 0 || numSamples == 0 || totalNumInputChannels == 0) {
         return;
     }
 
-    if (dryBuffer_.getNumChannels() < numChannels || dryBuffer_.getNumSamples() < numSamples) {
-        dryBuffer_.setSize(juce::jmax(numChannels, dryBuffer_.getNumChannels()),
-                           juce::jmax(numSamples, dryBuffer_.getNumSamples()),
-                           false, false, true);
+    for (int i = totalNumInputChannels; i < std::min(totalNumOutputChannels, numChannels); ++i) {
+        buffer.clear(i, 0, numSamples);
     }
-    for (int channel = 0; channel < numChannels; ++channel) {
-        dryBuffer_.copyFrom(channel, 0, buffer, channel, 0, numSamples);
+
+    const int maxSliceSamples = dryBuffer_.getNumSamples();
+    if (dryBuffer_.getNumChannels() < std::min(2, numChannels) || maxSliceSamples <= 0) {
+        return;
     }
 
     const float freq = currentFrequency();
@@ -160,35 +157,44 @@ void BassSpaceProcessor::processAudio(juce::AudioBuffer<float>& buffer, juce::Mi
     shaper_.setUpperTiltDb(currentUpperTilt());
     shaper_.setSoloLow(currentSoloLow());
 
-    float* left = buffer.getWritePointer(0);
-    float* right = (numChannels > 1 && totalNumInputChannels > 1) ? buffer.getWritePointer(1) : nullptr;
-    shaper_.processBlock(left, right, numSamples);
-
     const float decibels = outputDbParam_ != nullptr ? outputDbParam_->load(std::memory_order_relaxed) : 0.0f;
     outputGain_.setTargetValue(juce::Decibels::decibelsToGain(decibels));
     const bool bypassTarget = forceBypass || currentBypass();
     bypassMix_.setTargetValue(bypassTarget ? 0.0f : 1.0f);
     const bool mixBypass = bypassTarget || bypassMix_.isSmoothing();
 
-    float* channels[2] = { buffer.getWritePointer(0),
-                           numChannels > 1 ? buffer.getWritePointer(1) : nullptr };
+    const int activeChannels = std::min(2, numChannels);
+    const bool hasStereoInput = numChannels > 1 && totalNumInputChannels > 1;
     correlationMeter_.setCrossover(freq, slopeMode);
-    for (int sample = 0; sample < numSamples; ++sample) {
-        const float gain = outputGain_.getNextValue();
-        const float mix = mixBypass ? bypassMix_.getNextValue() : 1.0f;
-        float wetLeft = channels[0][sample] * gain;
-        float wetRight = channels[1] != nullptr ? channels[1][sample] * gain : wetLeft;
-        outputCeilingGuard_.process(wetLeft, wetRight);
 
-        const float dryLeft = dryBuffer_.getSample(0, sample);
-        channels[0][sample] = dryLeft + mix * (wetLeft - dryLeft);
-        if (channels[1] != nullptr) {
-            const float dryRight = dryBuffer_.getSample(1, sample);
-            channels[1][sample] = dryRight + mix * (wetRight - dryRight);
+    for (int offset = 0; offset < numSamples; offset += maxSliceSamples) {
+        const int sliceSamples = std::min(maxSliceSamples, numSamples - offset);
+        for (int channel = 0; channel < activeChannels; ++channel) {
+            dryBuffer_.copyFrom(channel, 0, buffer, channel, offset, sliceSamples);
         }
 
-        const float leftValue = channels[0][sample];
-        correlationMeter_.process(leftValue, channels[1] != nullptr ? channels[1][sample] : leftValue);
+        float* left = buffer.getWritePointer(0, offset);
+        float* right = hasStereoInput ? buffer.getWritePointer(1, offset) : nullptr;
+        shaper_.processBlock(left, right, sliceSamples);
+
+        float* channels[2] = { left, numChannels > 1 ? buffer.getWritePointer(1, offset) : nullptr };
+        for (int sample = 0; sample < sliceSamples; ++sample) {
+            const float gain = outputGain_.getNextValue();
+            const float mix = mixBypass ? bypassMix_.getNextValue() : 1.0f;
+            float wetLeft = channels[0][sample] * gain;
+            float wetRight = channels[1] != nullptr ? channels[1][sample] * gain : wetLeft;
+            outputCeilingGuard_.process(wetLeft, wetRight);
+
+            const float dryLeft = dryBuffer_.getSample(0, sample);
+            channels[0][sample] = dryLeft + mix * (wetLeft - dryLeft);
+            if (channels[1] != nullptr) {
+                const float dryRight = dryBuffer_.getSample(1, sample);
+                channels[1][sample] = dryRight + mix * (wetRight - dryRight);
+            }
+
+            const float leftValue = channels[0][sample];
+            correlationMeter_.process(leftValue, channels[1] != nullptr ? channels[1][sample] : leftValue);
+        }
     }
     correlation_.store(correlationMeter_.fullBand(), std::memory_order_relaxed);
     bassCorrelation_.store(correlationMeter_.lowBand(), std::memory_order_relaxed);
